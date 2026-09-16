@@ -1,0 +1,6 @@
+date,asset_name,type,source_url,license,used_in,modified,commercial_allowed,notes
+2026-09-16,tex-player,image,generated-in-code,N/A-self-made,Pulse Dodger,yes,yes,BootScene.makeGlowCircle 程序生成,无外部来源
+2026-09-16,tex-hazard,image,generated-in-code,N/A-self-made,Pulse Dodger,yes,yes,同上
+2026-09-16,tex-mote,image,generated-in-code,N/A-self-made,Pulse Dodger,yes,yes,同上
+2026-09-16,tex-spark,image,generated-in-code,N/A-self-made,Pulse Dodger,yes,yes,粒子贴图,程序生成
+2026-09-16,sfx-all,audio,generated-in-code,N/A-self-made,Pulse Dodger,yes,yes,WebAudio 振荡器合成,无音频文件

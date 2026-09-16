@@ -78,6 +78,117 @@ Idea（选题）
 
 所以本文不是承诺“今天一定公开上线”，而是指导你把开发者可控部分做到足够完整，并把平台不可控部分转成明确跟进动作。
 
+## Submit a game 心智模型
+
+`Submit a game` 不是一个普通上传表单。它本质上是在问 CrazyGames 审核团队 5 个问题：
+
+| 根本问题 | 通俗说法 | 你要给出的答案 | 常用度 |
+| --- | --- | --- | --- |
+| 这个游戏怎么运行 | 平台怎么加载你的游戏 | 选择 engine（引擎）/ hosting（托管方式），上传 web build 或提供 iframe | 地基 |
+| 这个游戏像不像成品 | QA 要不要放行 | 提供可玩的 build、英文 metadata、controls、截图、cover、preview video | 地基 |
+| 这个游戏能不能在目标设备玩 | 玩家打开会不会白屏/卡死/无法操作 | 声明 mobile、orientation、输入方式，并通过 Preview 和真机测试 | 地基 |
+| 这个游戏有没有平台义务 | 你勾选了什么，平台就会测什么 | save progress、multiplayer、mute audio、SDK、ads、account integration | 地基 |
+| 这个游戏能不能上线后增长 | Basic Launch 后值不值得继续推 | cover、首屏、玩法、retention、conversion、feedback、更新能力 | 进阶 |
+
+先建立这个认知：
+
+```text
+页面选项不是“偏好设置”，而是“审核承诺”。
+你勾选了 mobile，QA 就会按移动端测。
+你勾选了 mute audio，QA 就会按 CrazyGames SDK 静音要求测。
+你说保存进度，QA 就会检查 Data Module 或账号级保存链路。
+你选 externally hosted，收入和 SDK 就依赖外部托管链路是否正确。
+```
+
+对你当前第一款游戏，安全默认选择：
+
+```text
+Launch tab：Basic
+Game engine：HTML5
+Save progress：No, the game does not need progress save
+Supports mobile devices：只有真机触摸测过才勾
+Online multiplayer：No
+Supports CrazyGames muting audio through SDK：只有实现并测试 muteAudio 后才勾
+Hosting：上传 HTML5 build，不走 externally hosted iframe
+```
+
+为什么 `Game engine` 选 `HTML5`：
+
+```text
+Phaser / PixiJS / Three.js / 原生 Canvas / Vite / TypeScript 最终都是 HTML5 web build。
+CrazyGames 的下拉框不是在问你具体 JS 框架，而是在问平台该用哪条运行和 QA 路径。
+```
+
+什么时候不选 `HTML5`：
+
+| 选项 | 什么时候选 | 第一款是否建议 |
+| --- | --- | --- |
+| Externally hosted (iframe) | 游戏文件放在你自己的服务器，CrazyGames iframe 你的 URL | 不建议 |
+| Unity 版本项 | 你用 Unity WebGL 对应版本导出 | 不建议第一款 |
+| Godot | 你用 Godot Web export 并接对应 SDK | 不建议第一款 |
+| Cocos | 你用 Cocos Creator 并接对应 SDK | 可后续尝试 |
+| Construct / GDevelop | 你用可视化引擎导出 HTML5 | 可后续尝试 |
+| PlayCanvas / Defold / GameMaker | 你实际使用这些引擎导出 | 可后续尝试 |
+
+支持引擎的正确理解：
+
+```text
+CrazyGames 支持很多引擎，不代表第一天都要学。
+主线只选 HTML5 + Phaser/TypeScript/Vite。
+其他引擎只是未来扩展路线，不进入第一款执行路径。
+```
+
+## 提交材料总览
+
+在写代码前先知道要交什么。否则你会出现“游戏做好了，但封面、视频、描述、控制说明、SDK 承诺没准备”的阻塞。
+
+### 必交材料
+
+| 材料 | 用途 | 第一款怎么准备 |
+| --- | --- | --- |
+| Game build | 平台实际运行的游戏包 | `npm run build` 后把 `dist/` 压成 ZIP，根目录有 `index.html` |
+| Game name | 平台展示和审核识别 | 英文、35 字符以内、和游戏内标题一致 |
+| Game engine | 决定 QA 和运行路径 | 选 `HTML5` |
+| Metadata | 玩家和 QA 理解玩法 | short description、long description、instructions、controls |
+| Category | 决定展示和竞品环境 | 第一款选 `Arcade`，不要乱选热门分类 |
+| Orientation | 平台如何要求玩家旋转设备 | 按实际体验选 portrait / landscape / both |
+| Screenshots | 证明游戏真实可玩 | 至少准备菜单、游玩中、结算页 |
+| Cover images | 商店橱窗点击率 | 准备 landscape、portrait、square 三套封面 |
+| Preview video | 鼠标悬停/卡片预览 | 15-20 秒真实玩法视频，不要黑屏、logo 过场、鼠标光标和营销字 |
+| SDK evidence | 证明平台接入没破坏体验 | qa-report 记录 init、environment、gameplayStart/Stop、广告失败恢复 |
+| Asset license | 证明不是侵权或搬运 | `asset-license.csv` 记录素材来源和商用许可 |
+
+### 材料和页面字段的关系
+
+```text
+Upload step:
+  Game name
+  Game engine
+  Save progress
+  Game options
+  Build upload / Preview
+
+QA step:
+  平台检查 build、SDK、设备、性能、路径、资源、广告、静音、移动端。
+
+Details step:
+  description、instructions、category、orientation、cover、screenshots、preview video。
+
+Submit step:
+  确认所有材料和 QA 结果后正式提交。
+```
+
+### 第一款不要承诺的能力
+
+```text
+不要承诺账号保存。
+不要承诺多人。
+不要承诺复杂云存档。
+不要承诺 IAP。
+不要承诺外部托管。
+不要勾选你没有实现和测试过的 SDK 能力。
+```
+
 ## 今天默认技术路线
 
 第一天不要再纠结技术栈。默认路线：
@@ -146,10 +257,34 @@ IAP
 
 ```text
 1. 登录 https://developer.crazygames.com/
-2. 找到 Submit / My Games / Preview 入口。
-3. 创建一个测试 draft 或确认能进入新建游戏流程。
-4. 看清楚表单需要哪些字段：title、description、instructions、category、orientation、covers、screenshots、build。
-5. 如果 Portal 当前要求更多资料，记录到本文末尾的 submission-log。
+2. 进入 https://developer.crazygames.com/games
+3. 点击 Submit a game。
+4. 选择 Basic。
+5. Game name 填英文名，必须和游戏内标题一致。
+6. Game engine 选择 HTML5。
+7. Save progress 第一款选择 No, the game does not need progress save。
+8. Game options 按真实实现勾选，不要提前承诺。
+9. 点击 Preview 前，确认今天需要准备哪些材料。
+10. 如果 Portal 当前要求更多资料，记录到本文末尾的 submission-log。
+```
+
+页面选项怎么选：
+
+| 页面字段 | 第一款建议 | 为什么 |
+| --- | --- | --- |
+| Basic / Full | `Basic` | 新游戏先走 Basic Launch，Full Launch 需要完整平台要求和变现接入 |
+| Game name | 英文原创名 | 要和游戏内标题一致，避免碰瓷已有游戏 |
+| Game engine | `HTML5` | Phaser/Three.js/PixiJS/Vite/TS 都属于 HTML5 web build |
+| Save progress | `No` | 只用 `localStorage` 保存最高分，不等于 CrazyGames 账号级进度 |
+| Supports mobile devices | 真机测过再勾 | 勾了就会按移动端 QA |
+| Online multiplayer | 不勾 | 第一款不做多人，勾了会触发 multiplayer 要求 |
+| Supports muting audio through SDK | 实现 `muteAudio` 后再勾 | 勾了就要支持 CrazyGames SDK 静音设置 |
+
+不要选：
+
+```text
+Externally hosted (iframe)：除非你要自己托管游戏并让 CrazyGames iframe。
+Unity/Godot/Cocos/Construct/GDevelop：除非你的项目确实由这些引擎导出。
 ```
 
 失败处理：
@@ -505,6 +640,25 @@ muteAudio：如果平台要求静音，游戏不能再把声音打开。
 
 不要等 Portal 提交时才写文案。
 
+材料检查：
+
+| 材料 | 第一款标准 |
+| --- | --- |
+| Build ZIP | ZIP 根目录直接包含 `index.html`、assets 和构建文件，不要多套一层无意义父目录 |
+| Game title | 英文、原创、和游戏内标题一致、控制在页面提示长度内 |
+| Short description | 一句话说清核心玩法 |
+| Long description | 写清目标、操作、失败/胜利、成长或分数 |
+| Instructions | 同时写 touch 和 mouse 操作 |
+| Category | 第一款默认 `Arcade` |
+| Orientation | 按实际体验选择，移动端已测过再勾 mobile |
+| Screenshots | 菜单、游玩中、结算页 |
+| Landscape cover | 16:9，1920x1080 |
+| Portrait cover | 2:3，800x1200 |
+| Square cover | 1:1，800x800 |
+| Preview video | 15-20 秒，最大 50MB，展示真实玩法，不要声音、黑屏、logo 过场和促销文案 |
+| QA report | 记录浏览器、设备、包体、文件数、SDK 事件、广告失败恢复 |
+| Asset license | 记录所有素材来源、license、是否修改、是否允许商用 |
+
 提交材料模板：
 
 ```text
@@ -534,7 +688,7 @@ Touch drag, mouse drag.
 
 ```text
 3 张截图：菜单、游玩中、结算页。
-15-30 秒录屏。
+15-20 秒 preview video。
 Cover images：按 Portal 当前要求生成 landscape / portrait / square。
 build zip：根目录包含 index.html 和资源。
 qa-report.md：记录设备、浏览器、包体、SDK 事件。
