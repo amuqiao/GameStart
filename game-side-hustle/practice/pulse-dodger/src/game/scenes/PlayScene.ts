@@ -1,358 +1,384 @@
 import Phaser from 'phaser';
-import { GAME_HEIGHT, GAME_WIDTH, HAZARD, MOTE, PLAYER, PULSE, u } from '../config';
-
-/** 60Hz 下一帧的毫秒数,用作帧率补偿的基准 */
-const FRAME_MS_60 = 1000 / 60;
-
-/** 复活询问的倒计时秒数 */
-const REVIVE_PROMPT_SECONDS = 5;
+import { GAME_HEIGHT, GAME_WIDTH, u } from '../viewport';
+import { DEATH, GRAZE, HAZARD, PLAYER, PULSE, RUN } from '../tuning';
 import { THEME } from '../theme';
-import { Panel, type PanelButton } from '../ui/Panel';
+import { SCENES, type ResultData } from './contracts';
+import { fadeInScene, fadeToScene } from './transition';
+import { PauseController } from '../overlays/PauseController';
+import { ReviveFlow } from '../overlays/ReviveFlow';
+import { Backdrop } from '../objects/Backdrop';
 import { difficultyAt } from '../core/difficulty';
 import { GameState } from '../core/GameState';
-import { Hud } from '../ui/Hud';
+import { scores } from '../composition';
+import { Hud } from '../hud/Hud';
+import { PlayerRing } from '../hud/PlayerRing';
+import { RunTimeline } from '../hud/RunTimeline';
+import { Tutorial } from '../hud/Tutorial';
 import { platform } from '../../platform';
-import { audio } from '../systems/audio';
+import { audio } from '../effects/audio';
+import { PlayerController } from '../objects/PlayerController';
+import { HazardSpawner } from '../objects/HazardSpawner';
+import { MoteSpawner } from '../objects/MoteSpawner';
+import { Fx } from '../effects/fx';
+import { feel } from '../effects/feel';
+
+/** 死亡后的定格时长。让震屏和爆炸演完,玩家才看得清自己是怎么死的。 */
+const DEATH_HOLD_MS = 240;
+
+/**
+ * 玩法状态机。三种互斥态,非法组合(比如"暂停中同时又在结算")被
+ * 类型直接排除,不再需要 `resolving`/`paused` 两个 boolean 手动维护
+ * "这两个开关只有 3 种合法组合"这条隐性约束。
+ */
+type PlayPhase = 'playing' | 'paused' | 'resolving';
 
 /**
  * 主玩法场景。
  *
  * 后端类比:这是 request handler —— 每帧收一次输入,跑一遍规则,写一次输出。
  * 平台相关的东西一律不在这里出现,只通过 platform() 接口走。
+ *
+ * 暂停系统 / 复活广告编排在 `overlays/`(整段照抄的外壳代码),星空背景在
+ * `objects/Backdrop.ts`;玩法机件(玩家移动/输入、危险物与能量点的生成回收)
+ * 在 `objects/`,特效与镜头反馈在 `effects/`(换玩法时重写,但对象池化
+ * 这套结构照抄)。这个文件只剩:装配(create)、调度(update)、碰撞回调、
+ * 以及死亡/结算的编排。
+ *
+ * 这里刻意不 import GameState 以外的玩法细节:各 system 不许 import
+ * GameState(见各 system 文件头注释),"查询 → 改状态 → 表现 → 平台信号"
+ * 这四段编排只在这一个文件里发生,谁改了分数永远只有一个答案。
  */
 export class PlayScene extends Phaser.Scene {
   private state!: GameState;
   private hud!: Hud;
+  private reviveFlow!: ReviveFlow;
 
-  private player!: Phaser.Physics.Arcade.Image;
-  private hazards!: Phaser.Physics.Arcade.Group;
-  private motes!: Phaser.Physics.Arcade.Group;
+  private player!: PlayerController;
+  private hazards!: HazardSpawner;
+  private motes!: MoteSpawner;
+  private fx!: Fx;
 
-  private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
-  private spaceKey!: Phaser.Input.Keyboard.Key;
+  private playerRing!: PlayerRing;
+  private runTimeline!: RunTimeline;
+  private tutorial: Tutorial | null = null;
 
-  private nextHazardAt = 0;
-  private nextMoteAt = 0;
-  /** 死亡处理中,用来防止同一帧内多次触发结算 */
-  private resolving = false;
-  /** 暂停中。和 resolving 分开:死亡流程不允许被暂停打断 */
-  private paused = false;
-  private pausePanel: Panel | null = null;
-  private pauseButton!: Phaser.GameObjects.Text;
+  private phase: PlayPhase = 'playing';
+
+  /** 满充能的"从未满到满"边缘检测,只在跳变那一帧触发 playReadyBurst + 音效。 */
+  private wasPulseReady = false;
+
+  /** 玩家移动累计距离,只喂给 Tutorial 判断"玩家动过了没"。 */
+  private movedDistance = 0;
+  private lastPlayerX = 0;
+  private lastPlayerY = 0;
+
+  /** Tutorial 专用的本局统计,独立维护而不是从 GameState 读 ——
+   * GameState 目前只在 finish() 时才吐出这两个数字,不许碰 core/ 去加实时 getter。 */
+  private tutorialMotesCollected = 0;
+  private tutorialPulsesFired = 0;
+
+  /** graze 连击链:1.5s 内连续 graze 计数,超过窗口就重新从 1 计,喂给 audio.graze() 做音高上行。 */
+  private grazeChain = 0;
+  private lastGrazeAt = -Infinity;
 
   constructor() {
-    super('Play');
+    super(SCENES.Play);
   }
 
   create(): void {
-    this.state = new GameState();
-    this.resolving = false;
-    this.nextHazardAt = 0;
-    this.nextMoteAt = 0;
+    // GameState 现在通过构造函数注入 ScoreRepository(依赖倒置改造),
+    // 用唯一的组装点 composition.ts,不在这里自己 new 具体实现。
+    this.state = new GameState(scores);
+    this.phase = 'playing';
+    this.wasPulseReady = false;
+    this.movedDistance = 0;
+    this.tutorialMotesCollected = 0;
+    this.tutorialPulsesFired = 0;
+    this.grazeChain = 0;
+    this.lastGrazeAt = -Infinity;
+    this.lastPlayerX = GAME_WIDTH / 2;
+    this.lastPlayerY = GAME_HEIGHT / 2;
 
     this.cameras.main.setBackgroundColor(THEME.bg);
-    this.drawStarfield();
+    new Backdrop(this);
 
-    this.player = this.physics.add
-      .image(GAME_WIDTH / 2, GAME_HEIGHT / 2, 'tex-player')
-      .setCircle(PLAYER.radius, PLAYER.radius * 1.0, PLAYER.radius * 1.0)
-      .setCollideWorldBounds(true);
+    this.player = new PlayerController(this, { onPulseInput: () => this.onPulse() });
+    this.hazards = new HazardSpawner(this);
+    this.motes = new MoteSpawner(this);
+    this.fx = new Fx(this);
 
-    this.hazards = this.physics.add.group({ allowGravity: false });
-    this.motes = this.physics.add.group({ allowGravity: false });
-
-    this.physics.add.overlap(this.player, this.motes, this.onCollectMote, undefined, this);
-    this.physics.add.overlap(this.player, this.hazards, this.onHitHazard, undefined, this);
+    this.physics.add.overlap(this.player.sprite, this.motes.group, this.onCollectMote, undefined, this);
+    this.physics.add.overlap(this.player.sprite, this.hazards.group, this.onHitHazard, undefined, this);
 
     this.hud = new Hud(this);
+    this.playerRing = new PlayerRing(this);
+    this.runTimeline = new RunTimeline(this);
 
-    this.cursors = this.input.keyboard!.createCursorKeys();
-    this.spaceKey = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE);
+    // 首局(累计局数为 0)才需要教学引导;老玩家不用再看一遍。
+    const runsPlayed = scores.loadRunsPlayed();
+    this.tutorial = runsPlayed === 0 ? new Tutorial(this) : null;
 
-    this.input.on('pointerdown', this.tryPulse, this);
-    this.spaceKey.on('down', this.tryPulse, this);
+    // 开局宽限期:HazardSpawner 的 nextSpawnAt 初值是 0,不 holdFor 的话第一帧
+    // 就会生成碎片,而玩家刚进场还没看清屏幕。首局给更长的宽限期,配合
+    // Tutorial 的引导节奏;非首局给较短的固定宽限期。只推迟 hazard,不推迟
+    // mote —— 能量点对玩家有利,没有理由也跟着延后。
+    this.hazards.holdFor(runsPlayed === 0 ? RUN.firstRunGraceMs : RUN.introGraceMs);
 
-    this.createPauseControls();
+    // 键盘 SPACE 触发冲击波不属于 PlayerController 的"移动输入分流",
+    // 直接在这里绑定同一个 onPulse() 编排入口(见 PlayerController 文件头
+    // 关于这个决定的说明)。
+    this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE).on('down', () => this.onPulse());
+
+    // 只在这里 new 出来即可:暂停系统的全部生命周期(按钮/ESC/失焦/退出/
+    // SHUTDOWN 解绑)都在 PauseController 内部自我管理,PlayScene 不需要
+    // 再持有引用去调用它的任何方法。
+    new PauseController(this, {
+      onPause: () => {
+        this.phase = 'paused';
+      },
+      onResume: () => {
+        this.phase = 'playing';
+        // 给缓冲窗再恢复生成,避免"点继续的瞬间被一直悬在头上的碎片撞死"。
+        // hazard 和 mote 必须同时推迟 —— 只推一个的话另一个的生成节奏没停。
+        this.bumpSpawnBuffer(RUN.resumeBufferMs);
+      },
+      canPause: () => this.phase !== 'resolving',
+      isAudioMuted: () => audio.isUserMuted,
+      toggleAudioMuted: () => audio.toggleUserMuted(),
+    });
+    this.reviveFlow = new ReviveFlow(this, {
+      setAdMuted: (muted) => audio.setAdMuted(muted),
+    });
+
+    fadeInScene(this);
 
     // 平台信号:玩家真正开始玩了
     platform().gameplayStart();
   }
 
-  // ---------------------------------------------------------------- 暂停
-
-  /**
-   * 暂停有两个入口,缺一不可:
-   *   主动 —— 玩家按 ESC 或点暂停按钮,他知道自己按了
-   *   被动 —— 窗口失焦,玩家毫不知情。**这个比主动的更重要**
-   *
-   * 关于 Phaser 的默认行为(实测 node_modules/phaser/src/core/Game.js):
-   *   切标签页(HIDDEN)  → Phaser 会自己 loop.pause(),游戏事实上停住了
-   *   点到别的窗口(BLUR) → Phaser 只设 inFocus=false,**游戏继续跑**
-   * 所以 BLUR 是真缺口。而 HIDDEN 虽然 Phaser 停了循环,但它会在回来时
-   * **立刻自动恢复**,玩家还没反应过来就要操作 —— 所以这里也接管,
-   * 让玩家自己点"继续"再开始。
-   */
-  private createPauseControls(): void {
-    this.pauseButton = this.add
-      .text(GAME_WIDTH - THEME.space.md, THEME.space.sm, THEME.copy.pauseGlyph, {
-        fontSize: THEME.font.body,
-        color: THEME.text.dim,
-        backgroundColor: '#1e293b88',
-        padding: { x: THEME.space.sm, y: THEME.space.xs },
-      })
-      .setOrigin(1, 0)
-      .setDepth(100)
-      .setInteractive({ useHandCursor: true });
-
-    this.pauseButton.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
-      // 阻止这次点击继续冒泡去触发冲击波
-      pointer.event.stopPropagation();
-      this.pauseGame(false);
-    });
-
-    this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.ESC).on('down', () => {
-      if (this.paused) {
-        this.resumeGame();
-      } else {
-        this.pauseGame(false);
-      }
-    });
-
-    const onBlur = (): void => this.pauseGame(true);
-    const onVisible = (): void => this.pauseGame(true);
-    this.game.events.on(Phaser.Core.Events.BLUR, onBlur);
-    this.game.events.on(Phaser.Core.Events.VISIBLE, onVisible);
-
-    // **场景级清理**。Phaser 的场景切走后 game.events 上的监听不会自动移除,
-    // 不解绑的话下次进 Play 会重复注册,失焦一次弹出多个面板。
-    // 后端里请求结束一切自动回收,游戏里没有这个保障,必须手写。
-    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
-      this.game.events.off(Phaser.Core.Events.BLUR, onBlur);
-      this.game.events.off(Phaser.Core.Events.VISIBLE, onVisible);
-      this.pausePanel?.destroy();
-      this.pausePanel = null;
-    });
-  }
-
-  private pauseGame(auto: boolean): void {
-    // 死亡结算 / 广告流程中不允许暂停,否则会和复活询问的倒计时打架
-    if (this.paused || this.resolving) {
-      return;
-    }
-
-    this.paused = true;
-    this.physics.pause();
-    this.tweens.pauseAll();
-    this.time.paused = true;
-    this.pauseButton.setVisible(false);
-
-    // 暂停期间不算"在玩",要通知平台,否则平台数据会虚高
-    platform().gameplayStop();
-
-    const buttons: PanelButton[] = [
-      { label: THEME.copy.resume, style: 'primary' as const, onClick: () => this.resumeGame() },
-      { label: THEME.copy.quitToMenu, style: 'ghost' as const, onClick: () => this.quitToMenu() },
-    ];
-
-    // 平台没提供静音时,暂停面板里顺手给一个 —— 这是玩家最可能想在这里调的东西
-    if (!platform().capabilities.platformProvidesAudioToggle) {
-      buttons.splice(1, 0, {
-        label: audio.isUserMuted ? THEME.copy.soundOff : THEME.copy.soundOn,
-        style: 'ghost' as const,
-        onClick: () => {
-          const muted = audio.toggleUserMuted();
-          this.pausePanel?.setButtonLabel(1, muted ? THEME.copy.soundOff : THEME.copy.soundOn);
-        },
-      });
-    }
-
-    this.pausePanel = new Panel(this, {
-      title: THEME.copy.paused,
-      subtitle: auto ? THEME.copy.autoPausedHint : undefined,
-      buttons,
-    });
-  }
-
-  private resumeGame(): void {
-    if (!this.paused) {
-      return;
-    }
-
-    this.paused = false;
-    this.pausePanel?.destroy();
-    this.pausePanel = null;
-    this.pauseButton.setVisible(true);
-
-    this.physics.resume();
-    this.tweens.resumeAll();
-    this.time.paused = false;
-
-    // 给 0.6 秒缓冲再恢复生成,避免"点继续的瞬间被一直悬在头上的碎片撞死"
-    this.nextHazardAt = this.time.now + 600;
-
-    platform().gameplayStart();
-  }
-
-  private quitToMenu(): void {
-    this.paused = false;
-    this.time.paused = false;
-    this.tweens.resumeAll();
-    this.scene.start('Menu');
-  }
-
   override update(_time: number, delta: number): void {
-    if (this.resolving || this.paused) {
+    if (this.phase !== 'playing') {
       return;
     }
 
+    const now = this.time.now;
     this.state.tick(delta);
-    this.movePlayer(delta);
-    this.spawnByDifficulty();
-    this.cullOffscreen();
+    this.player.update(delta);
+
+    const { x, y } = this.player.position;
+
+    // 移动距离累计,只喂给 Tutorial,不参与任何玩法判定。
+    this.movedDistance += Phaser.Math.Distance.Between(this.lastPlayerX, this.lastPlayerY, x, y);
+    this.lastPlayerX = x;
+    this.lastPlayerY = y;
+
+    const d = difficultyAt(this.state.elapsedSeconds);
+
+    // Tutorial 首局期间可以要求暂缓危险物生成,跳过 hazard 的生成/回收更新。
+    if (!this.tutorial?.wantsHazardHold) {
+      this.hazards.update(now, d);
+    }
+    this.motes.update(now, d);
+
+    this.updateGraze(x, y, now);
+
+    const inRangeCount = this.hazards.collectWithin(x, y, PULSE.radius).length;
+    this.playerRing.update(x, y, this.state.chargeRatio, this.state.pulseReady, inRangeCount, delta, now);
+
+    const pulseReady = this.state.pulseReady;
+    if (pulseReady && !this.wasPulseReady) {
+      this.playerRing.playReadyBurst(x, y);
+      audio.chargeFull();
+    }
+    this.wasPulseReady = pulseReady;
+
+    this.runTimeline.update(this.state.elapsedSeconds, now);
+
+    if (this.tutorial) {
+      this.tutorial.update({
+        now,
+        playerX: x,
+        playerY: y,
+        chargeRatio: this.state.chargeRatio,
+        pulseReady: this.state.pulseReady,
+        motesCollected: this.tutorialMotesCollected,
+        pulsesFired: this.tutorialPulsesFired,
+        isTouch: this.sys.game.device.input.touch,
+        movedDistance: this.movedDistance,
+      });
+      if (this.tutorial.isDone) {
+        this.tutorial.destroy();
+        this.tutorial = null;
+      }
+    }
+
     this.hud.update(this.state);
   }
 
-  // ---------------------------------------------------------------- 输入
-
-  private movePlayer(delta: number): void {
-    const pointer = this.input.activePointer;
-
-    // 指针按下过或正在移动 -> 跟随指针;否则走键盘。两套输入并存,
-    // 桌面和手机都能玩,这是 CrazyGames 技术要求里明确列的一条。
-    const usingKeyboard =
-      this.cursors.left.isDown ||
-      this.cursors.right.isDown ||
-      this.cursors.up.isDown ||
-      this.cursors.down.isDown;
-
-    if (usingKeyboard) {
-      const step = (PLAYER.keyboardSpeed * delta) / 1000;
-      const dx = (this.cursors.right.isDown ? 1 : 0) - (this.cursors.left.isDown ? 1 : 0);
-      const dy = (this.cursors.down.isDown ? 1 : 0) - (this.cursors.up.isDown ? 1 : 0);
-      const len = Math.hypot(dx, dy) || 1;
-      this.player.x = Phaser.Math.Clamp(this.player.x + (dx / len) * step, 0, GAME_WIDTH);
-      this.player.y = Phaser.Math.Clamp(this.player.y + (dy / len) * step, 0, GAME_HEIGHT);
-      return;
-    }
-
-    const world = pointer.positionToCamera(this.cameras.main) as Phaser.Math.Vector2;
-
-    // **帧率补偿**。直接每帧 lerp 固定比例会让 144Hz 显示器上的跟随速度
-    // 快 2.4 倍、165Hz 快 2.75 倍 —— 等于不同硬件难度不同,
-    // CrazyGames 明文要求 "physics must perform consistently across
-    // different monitor refresh rates"。
-    // 这里把"每帧 18%"换算成"每 16.667ms 18%",任何刷新率下手感一致。
-    const t = 1 - Math.pow(1 - PLAYER.followLerp, delta / FRAME_MS_60);
-    this.player.x = Phaser.Math.Linear(this.player.x, world.x, t);
-    this.player.y = Phaser.Math.Linear(this.player.y, world.y, t);
+  /** hazard/mote 的下一次生成时间统一推迟同一个缓冲窗,不再各写各的裸数字。 */
+  private bumpSpawnBuffer(bufferMs: number): void {
+    this.hazards.holdFor(bufferMs);
+    this.motes.holdFor(bufferMs);
   }
 
-  private tryPulse(): void {
-    if (this.resolving || this.paused || !this.state.pulseReady) {
+  // ---------------------------------------------------------------- graze
+
+  /**
+   * graze 查询 → 改状态 → 表现/音效。几何判定(线段到玩家的最短距离,
+   * 帧率一致性推理)全部在 `HazardSpawner.collectNewGrazes` 里,这里只管
+   * 记账和轻量表现。不震屏、不 hitstop —— 一局会发生几百次,任何"重"的
+   * 反馈都会变成噪音。
+   */
+  private updateGraze(x: number, y: number, now: number): void {
+    const contactRadius = PLAYER.radius + HAZARD.radius;
+    const newGrazes = this.hazards.collectNewGrazes(x, y, contactRadius, GRAZE.radius);
+    if (newGrazes.length === 0) {
       return;
     }
 
-    const cleared: Phaser.Physics.Arcade.Image[] = [];
-    for (const obj of this.hazards.getChildren()) {
-      const hazard = obj as Phaser.Physics.Arcade.Image;
-      if (!hazard.active) continue;
-      const dist = Phaser.Math.Distance.Between(this.player.x, this.player.y, hazard.x, hazard.y);
-      if (dist <= PULSE.radius) {
-        cleared.push(hazard);
-      }
+    for (const h of newGrazes) {
+      this.state.grazeHazard();
+
+      this.grazeChain = now - this.lastGrazeAt <= GRAZE.chainWindowMs ? this.grazeChain + 1 : 1;
+      this.lastGrazeAt = now;
+
+      audio.graze(this.grazeChain);
+      this.grazeArc(h, x, y);
+    }
+  }
+
+  /** 碎片朝玩家那一侧的白色短弧,120ms 淡出。fx.ts 没有现成的"弧线"方法,
+   * 这类一次性的自定义几何表现直接在 PlayScene 里用 Phaser 原生图形对象画。 */
+  private grazeArc(h: Phaser.Physics.Arcade.Image, playerX: number, playerY: number): void {
+    const angleDeg = Phaser.Math.RadToDeg(Phaser.Math.Angle.Between(h.x, h.y, playerX, playerY));
+    const radius = HAZARD.radius + GRAZE.arcRadiusGap;
+
+    const arc = this.add.arc(h.x, h.y, radius, angleDeg - GRAZE.arcHalfSpanDeg, angleDeg + GRAZE.arcHalfSpanDeg, false, 0xffffff, 0);
+    arc.closePath = false; // 只要弧线本身,不要闭合成扇形
+    arc.setStrokeStyle(GRAZE.arcStrokeWidth, 0xffffff, 1).setDepth(40);
+
+    this.tweens.add({
+      targets: arc,
+      alpha: 0,
+      duration: GRAZE.arcFadeMs,
+      onComplete: () => arc.destroy(),
+    });
+  }
+
+  /**
+   * 冲击波编排。四段各一眼:查询 → 改状态 → 表现 → 平台信号。
+   * 这是这个文件里唯一还处理"玩法逻辑"的地方,其余全是装配和调度。
+   */
+  private onPulse(): void {
+    if (this.phase !== 'playing' || !this.state.pulseReady) {
+      return;
     }
 
-    const gained = this.state.spendPulse(cleared.length);
+    const { x, y } = this.player.position;
+    const hit = this.hazards.collectWithin(x, y, PULSE.radius); // 查询
+    const gained = this.state.spendPulse(hit.length); // 改状态
+    this.tutorialPulsesFired += 1;
+
     audio.pulse();
-    this.playShockwave();
-
-    for (const hazard of cleared) {
-      this.burst(hazard.x, hazard.y, THEME.entity.hazard);
-      hazard.destroy();
-    }
+    this.fx.shockwave(x, y, PULSE.radius); // 表现:主环
+    this.secondaryRing(x, y); // 表现:延迟的第二圈环,线宽/alpha 减半
 
     if (gained > 0) {
-      this.floatText(this.player.x, this.player.y - 40, `+${gained}`, THEME.entity.pulse);
+      this.fx.floatText(x, y - u(40), `+${gained}`, THEME.entity.pulse);
     }
+
+    // 命中够多才有"重量感":hitstop 只在清一大片时触发,震屏强度按命中数
+    // 插值但封顶(见 tuning.ts PULSE.shakeCapIntensity,低于 FEEL 硬上限)。
+    if (hit.length >= PULSE.hitstopMinCount) {
+      feel.hitstop(this, PULSE.hitstopMs);
+    }
+    feel.shake(this, PULSE.shakeDurationMs, (Math.min(hit.length, PULSE.shakeCapCount) / PULSE.shakeCapCount) * PULSE.shakeCapIntensity);
+    this.zoomPunch();
+
+    // 错峰清场:把"数量"变成可听可见的节奏,而不是一帧闪一下没了。
+    this.staggeredClear(hit, x, y);
 
     // 一次清掉一大片 = 玩家爽到了。平台用这个信号优化广告时机和推荐权重。
-    if (cleared.length >= PULSE.happyTimeThreshold) {
-      platform().happyTime();
+    if (hit.length >= PULSE.happyTimeThreshold) {
+      platform().happyTime(); // 平台信号
     }
   }
 
-  // ---------------------------------------------------------------- 生成
-
-  private spawnByDifficulty(): void {
-    const now = this.time.now;
-    const d = difficultyAt(this.state.elapsedSeconds);
-
-    if (now >= this.nextHazardAt) {
-      for (let i = 0; i < d.hazardBatch; i++) {
-        this.spawnHazard(u(d.hazardSpeed));
-      }
-      this.nextHazardAt = now + d.hazardIntervalMs;
-    }
-
-    if (now >= this.nextMoteAt) {
-      this.spawnMote();
-      this.nextMoteAt = now + d.moteIntervalMs;
-    }
+  /** 第二圈冲击波环,延迟 ring2DelayMs 才出现,线宽/alpha 减半,叠加出"双环"的层次感。 */
+  private secondaryRing(x: number, y: number): void {
+    this.time.delayedCall(PULSE.ring2DelayMs, () => {
+      const ring = this.add.circle(x, y, PULSE.ring2StartRadius).setDepth(50);
+      ring.setStrokeStyle(PULSE.ring2StrokeWidth, THEME.entity.pulse, PULSE.ring2StartAlpha);
+      this.tweens.add({
+        targets: ring,
+        radius: PULSE.radius,
+        alpha: 0,
+        duration: 380,
+        ease: 'Cubic.Out',
+        onComplete: () => ring.destroy(),
+      });
+    });
   }
 
-  /** 从屏幕外某条边生成,朝对侧偏随机角度飞过 —— 保证总有可躲的缝隙。 */
-  private spawnHazard(speed: number): void {
-    const edge = Phaser.Math.Between(0, 3);
-    const margin = HAZARD.spawnMargin;
-    let x = 0;
-    let y = 0;
-
-    switch (edge) {
-      case 0: x = Phaser.Math.Between(0, GAME_WIDTH); y = -margin; break;
-      case 1: x = GAME_WIDTH + margin; y = Phaser.Math.Between(0, GAME_HEIGHT); break;
-      case 2: x = Phaser.Math.Between(0, GAME_WIDTH); y = GAME_HEIGHT + margin; break;
-      default: x = -margin; y = Phaser.Math.Between(0, GAME_HEIGHT); break;
-    }
-
-    const hazard = this.hazards.create(x, y, 'tex-hazard') as Phaser.Physics.Arcade.Image;
-    hazard.setCircle(HAZARD.radius, HAZARD.radius, HAZARD.radius);
-
-    // 朝屏幕中心附近飞,加一点随机偏移,避免全部撞向正中央
-    const targetX = GAME_WIDTH / 2 + Phaser.Math.Between(-HAZARD.scatterX, HAZARD.scatterX);
-    const targetY = GAME_HEIGHT / 2 + Phaser.Math.Between(-HAZARD.scatterY, HAZARD.scatterY);
-    const angle = Phaser.Math.Angle.Between(x, y, targetX, targetY);
-    hazard.setVelocity(Math.cos(angle) * speed, Math.sin(angle) * speed);
-    // 角速度是纯视觉旋转,不涉及空间距离,不需要过 u()
-    hazard.setAngularVelocity(Phaser.Math.Between(-HAZARD.spinRange, HAZARD.spinRange));
-  }
-
-  private spawnMote(): void {
-    const inset = THEME.space.xl;
-    const mote = this.motes.create(
-      Phaser.Math.Between(inset, GAME_WIDTH - inset),
-      Phaser.Math.Between(inset, GAME_HEIGHT - inset),
-      'tex-mote',
-    ) as Phaser.Physics.Arcade.Image;
-    mote.setCircle(MOTE.radius, MOTE.radius, MOTE.radius);
-    mote.setScale(0);
-
-    this.tweens.add({ targets: mote, scale: 1, duration: 220, ease: 'Back.Out' });
-    // 8 秒没被吃就消失,避免屏幕上越堆越多
-    this.time.delayedCall(8000, () => {
-      if (mote.active) {
-        this.tweens.add({ targets: mote, scale: 0, duration: 200, onComplete: () => mote.destroy() });
+  /** 只向上不向下的 zoom punch —— FIT 缩放下 zoom < 1 会露出世界外的黑边。 */
+  /**
+   * 镜头轻推。只向上推(≤1.02)再弹回 1,**绝不推到小于 1** ——
+   * Scale.FIT 模式下 zoom < 1 会把世界边界外的黑边露出来。
+   *
+   * ⚠️ **缓动名必须写 `'Sine.easeOut'` 这种全称,不能写 `'Sine.Out'`。**
+   *
+   * 这是一个真机才能发现的坑:Tween 和相机效果对缓动名的容错程度完全不同。
+   *   - Tween 走 `GetEaseFunction`,有字符串纠错分支:
+   *     `'Cubic.Out'` → 拆出 `.Out` → 转成 `easeOut` → 命中 `'Cubic.easeOut'`
+   *   - 相机效果(`cameras/2d/effects/Zoom.js` 的 `start`)**直接查 EaseMap**,
+   *     没有任何纠错:`EaseMap.hasOwnProperty(ease)` 不命中就什么都不做,
+   *     `this.ease` 保持 undefined,**下一帧调用它直接抛
+   *     `TypeError: this.ease is not a function`,整个游戏循环当场死掉**。
+   *
+   * 所以同一个 `'Sine.Out'` 在 tween 里完全正常,在 zoomTo 里是致命的。
+   * 类型检查看不见(参数类型就是 string)、构建看不见、29 个单测也看不见 ——
+   * 这个 bug 是真人按下空格才暴露出来的。
+   */
+  private zoomPunch(): void {
+    this.cameras.main.zoomTo(PULSE.zoomPunchScale, PULSE.zoomPunchMs, 'Sine.easeOut', true, (_cam, progress) => {
+      if (progress === 1) {
+        this.cameras.main.zoomTo(1, PULSE.zoomPunchMs, 'Sine.easeIn');
       }
     });
   }
 
-  private cullOffscreen(): void {
-    const pad = HAZARD.cullPadding;
-    for (const obj of this.hazards.getChildren()) {
-      const h = obj as Phaser.Physics.Arcade.Image;
-      if (h.x < -pad || h.x > GAME_WIDTH + pad || h.y < -pad || h.y > GAME_HEIGHT + pad) {
-        h.destroy();
-      }
+  /**
+   * 错峰清场:按到 origin 的距离排序,第 i 个延迟 `i × PULSE.clearStaggerMs`
+   * 才执行"粒子 + 缩到 0 + 回收",同一个延迟点播 `audio.pulseHit(i)`
+   * (上行琶音)。命中的碎片立即 disableBody(不带 hide 参数)停止移动和碰撞
+   * (否则清场这段时间里它们还能撞死玩家),但保持可见,直到各自的延迟点才
+   * 真正被回收 —— 这样"波扫过去"才有先后顺序,而不是同一帧全部消失。
+   *
+   * onPulse(冲击波命中)和 revive(复活清场,不给分)共用这一套表现。
+   */
+  private staggeredClear(hazardsToClear: Phaser.Physics.Arcade.Image[], originX: number, originY: number): void {
+    const sorted = [...hazardsToClear].sort(
+      (a, b) =>
+        Phaser.Math.Distance.Between(originX, originY, a.x, a.y) -
+        Phaser.Math.Distance.Between(originX, originY, b.x, b.y),
+    );
+
+    for (const h of sorted) {
+      h.disableBody(false, false);
     }
+
+    sorted.forEach((h, i) => {
+      this.time.delayedCall(i * PULSE.clearStaggerMs, () => {
+        this.fx.burst(h.x, h.y, THEME.entity.hazard);
+        audio.pulseHit(i);
+        this.tweens.add({
+          targets: h,
+          scale: 0,
+          duration: PULSE.clearShrinkMs,
+          onComplete: () => this.hazards.despawn(h),
+        });
+      });
+    });
   }
 
   // ---------------------------------------------------------------- 碰撞
@@ -361,10 +387,16 @@ export class PlayScene extends Phaser.Scene {
     const mote = moteObj as Phaser.Physics.Arcade.Image;
     if (!mote.active) return;
 
-    mote.destroy();
+    const moteX = mote.x;
+    const moteY = mote.y;
+    const { x: playerX, y: playerY } = this.player.position;
+
+    this.motes.despawn(mote);
     this.state.collectMote();
-    audio.collect();
-    this.burst(mote.x, mote.y, THEME.entity.mote);
+    this.tutorialMotesCollected += 1;
+    audio.collect(this.state.combo);
+    this.fx.burst(moteX, moteY, THEME.entity.mote);
+    this.chargeFlightParticle(moteX, moteY, playerX, playerY);
 
     // 用"当前分 / 历史最高分"近似进度,给平台一个能读的完成度
     if (this.state.best > 0) {
@@ -372,171 +404,216 @@ export class PlayScene extends Phaser.Scene {
     }
   };
 
-  private onHitHazard: Phaser.Types.Physics.Arcade.ArcadePhysicsCallback = () => {
-    if (this.resolving) return;
-    void this.handleDeath();
+  /**
+   * 充能飞行粒子:从 mote 位置飞一颗缩小的 mote 贴图到玩家位置,260ms
+   * Cubic.In。把"蓝点 → 充能"这条因果关系变成一条肉眼可见的抛物线,
+   * 比任何文字提示都直接,而且天然多语言、不用读字。
+   */
+  private chargeFlightParticle(fromX: number, fromY: number, toX: number, toY: number): void {
+    const particle = this.add.image(fromX, fromY, 'tex-mote').setScale(0.5).setDepth(95);
+    this.tweens.add({
+      targets: particle,
+      x: toX,
+      y: toY,
+      scale: 0.15,
+      duration: 260,
+      ease: 'Cubic.In',
+      onComplete: () => particle.destroy(),
+    });
+  }
+
+  private onHitHazard: Phaser.Types.Physics.Arcade.ArcadePhysicsCallback = (_player, hazardObj) => {
+    if (this.phase === 'resolving') return;
+    this.handleDeath(hazardObj as Phaser.Physics.Arcade.Image);
   };
 
-  private async handleDeath(): Promise<void> {
-    this.resolving = true;
-    this.physics.pause();
-    audio.hit();
-    this.cameras.main.shake(260, 0.012);
-    this.burst(this.player.x, this.player.y, THEME.entity.hazard, 26);
-    this.player.setVisible(false);
-
+  /**
+   * 死亡反馈序列。全部用绝对时间戳(`this.time.now`)编排各阶段,不用
+   * `delayedCall` —— 理由见 `effects/feel.ts` 文件头注释第 3 条,以及
+   * `tuning.ts` 里 `DEATH` 常量块的说明。timeScale 的实际操作复用
+   * `feel.slowMo`(它内部已经用同一套"未缩放绝对时间戳"机制自我恢复);
+   * 这里只需要自己的 `scheduleAt` 来编排"第二阶段何时开始""整个序列何时
+   * 结束"这两个 feel.ts 没有现成 API 覆盖的时间点。
+   */
+  private handleDeath(killer: Phaser.Physics.Arcade.Image): void {
+    this.phase = 'resolving';
+    this.state.resetCombo();
     platform().gameplayStop();
 
-    // 每局只给一次复活机会,且必须平台真的支持激励视频才提示
-    if (!this.state.reviveUsed && platform().capabilities.rewardedAds) {
-      const accepted = await this.askRevive();
-      if (accepted) {
-        const rewarded = await platform().showRewarded('revive');
-        // 只有真的看完广告才复活。adError / 中途关闭一律不发奖。
-        if (rewarded) {
-          this.revive();
-          return;
-        }
+    const t0 = this.time.now;
+    const { x: px, y: py } = this.player.position;
+    const cx = (px + killer.x) / 2;
+    const cy = (py + killer.y) / 2;
+
+    audio.death();
+
+    // t=0:近似定格(feel.slowMo 把 timeScale 拉到接近冻结,而不是
+    // physics.pause() 硬停 —— 这样才能在 hitstopMs 之后无缝滑进慢动作,
+    // 而不是一次性硬切)。
+    feel.slowMo(this, DEATH.hitstopPhysicsScale, DEATH.hitstopTweenScale, DEATH.hitstopMs);
+
+    // t=0:碰撞点扩张白环
+    const ring = this.add.circle(cx, cy, DEATH.ringStartRadius).setDepth(60);
+    ring.setStrokeStyle(DEATH.ringStrokeWidth, 0xffffff, 1);
+    this.tweens.add({
+      targets: ring,
+      radius: DEATH.ringEndRadius,
+      alpha: 0,
+      duration: DEATH.ringDurationMs,
+      ease: 'Quad.Out',
+      onComplete: () => ring.destroy(),
+    });
+
+    // t=0:全屏红色 vignette
+    const vignette = this.add
+      .rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, GAME_WIDTH, GAME_HEIGHT, THEME.entity.hazard, DEATH.vignetteAlpha)
+      .setDepth(59);
+    this.tweens.add({
+      targets: vignette,
+      alpha: 0,
+      duration: DEATH.vignetteDurationMs,
+      onComplete: () => vignette.destroy(),
+    });
+
+    this.scheduleAt(t0 + DEATH.hitstopMs, () => {
+      // t=140ms:解除近似定格,进入慢动作
+      feel.slowMo(this, DEATH.slowMoPhysicsScale, DEATH.slowMoTweenScale, DEATH.slowMoMs);
+      feel.shake(this, DEATH.shakeMs, DEATH.shakeIntensity);
+      this.dimAllExcept(killer);
+      this.explodePlayer(px, py);
+    });
+
+    this.scheduleAt(t0 + DEATH.hitstopMs + DEATH.slowMoMs, () => {
+      // t=560ms:整段死亡序列演完,进入复活询问或直接结算
+      void this.afterDeath();
+    });
+  }
+
+  /** 用未缩放的 `scene.time.now` 轮询,不受 physics/tween 的 timeScale 影响 ——
+   * 和 `feel.ts` 内部 `afterUnscaledDelay` 完全同一套模式,理由见该文件头注释。 */
+  private scheduleAt(atMs: number, run: () => void): void {
+    const tick = (): void => {
+      if (this.time.now < atMs) {
+        return;
+      }
+      this.events.off(Phaser.Scenes.Events.UPDATE, tick);
+      run();
+    };
+    this.events.on(Phaser.Scenes.Events.UPDATE, tick);
+  }
+
+  /** 除 killer 外所有 hazard/mote 变暗,killer 保持全亮 + 白色 tint ——
+   * 这一条就是"我为什么死"的全部答案:屏幕上只有一个东西是亮的。 */
+  private dimAllExcept(killer: Phaser.Physics.Arcade.Image): void {
+    // 一个 Tween 驱动一组 targets,不要每个对象各建一个。
+    //
+    // 这里是全局单帧分配的尖峰位置:后期同屏可到 ~27 个实体,逐个 add 就是 27 个
+    // Tween 对象(每个还带自己的 TweenData 数组和 easing 引用)。而它发生的时刻
+    // 正好是 hitstop 解除、玩家爆炸粒子生成、震屏同时触发的那一帧 ——
+    // **玩家最想要丝滑的那一帧**,也是他决定要不要再来一局的那一帧。
+    const targets = [...this.hazards.group.getChildren(), ...this.motes.group.getChildren()].filter(
+      (obj) => {
+        const go = obj as Phaser.Physics.Arcade.Image;
+        return go.active && go !== killer;
+      },
+    );
+
+    if (targets.length > 0) {
+      this.tweens.add({ targets, alpha: DEATH.dimAlpha, duration: DEATH.dimDurationMs });
+    }
+
+    killer.setTint(0xffffff).setAlpha(1);
+  }
+
+  /** 玩家球不隐藏,改成炸开:球体本身 scale/alpha 归零 + 一次性粒子迸溅。 */
+  private explodePlayer(x: number, y: number): void {
+    this.tweens.add({
+      targets: this.player.sprite,
+      scale: 0,
+      alpha: 0,
+      duration: DEATH.explodeDurationMs,
+      ease: 'Back.In',
+    });
+
+    // 走 fx 的常驻 emitter,不要现建一个临时的。
+    // 现建的那个既是一次运行时分配(死亡瞬间已经够忙了),
+    // 它的粒子还不计入 FX.particleCap 的全局预算 —— 如果死亡恰好和
+    // 一次没跑完的错峰清场重叠,同屏粒子会超过文档宣称的硬上限。
+    this.fx.explode(x, y, THEME.entity.player, DEATH.explodeParticleCount);
+  }
+
+  private async afterDeath(): Promise<void> {
+    // 每局只给一次复活机会。配额判断在 GameState(reviveUsed 私有化,外部
+    // 只能读 canRevive);能不能放广告的能力检测在 ReviveFlow.offer() 内部。
+    if (this.state.canRevive) {
+      const revived = await this.reviveFlow.offer();
+      if (revived) {
+        this.revive();
+        return;
       }
     }
 
     this.finishRun();
   }
 
-  /**
-   * 复活询问。用共用的 Panel,不再手搓一套 —— 手搓的那版既没走 theme.copy
-   * (以后做多语言会漏翻译),也没走 Panel(换皮时不会跟着变)。
-   *
-   * 5 秒倒计时:点了算接受,超时算放弃。不给"拒绝"按钮是刻意的 ——
-   * 多一个按钮只会让玩家多一次决策,而超时本身就等于拒绝。
-   */
-  private askRevive(): Promise<boolean> {
-    return new Promise<boolean>((resolve) => {
-      let remaining = REVIVE_PROMPT_SECONDS;
-
-      const panel = new Panel(this, {
-        title: THEME.copy.reviveTitle,
-        subtitle: THEME.copy.reviveCountdown(remaining),
-        buttons: [
-          {
-            label: THEME.copy.reviveButton,
-            style: 'warning',
-            onClick: () => {
-              timer.remove();
-              panel.destroy();
-              resolve(true);
-            },
-          },
-        ],
-      });
-
-      const timer = this.time.addEvent({
-        delay: 1000,
-        repeat: REVIVE_PROMPT_SECONDS - 1,
-        callback: () => {
-          remaining -= 1;
-          panel.setSubtitle(THEME.copy.reviveCountdown(remaining));
-          if (remaining <= 0) {
-            panel.destroy();
-            resolve(false);
-          }
-        },
-      });
-    });
-  }
-
   private revive(): void {
-    this.state.reviveUsed = true;
+    // reviveUsed 私有化后只能通过 consumeRevive() 消耗
+    this.state.consumeRevive();
 
-    // 清场给玩家一个喘息窗口,否则复活即死,广告等于白看
-    for (const obj of this.hazards.getChildren().slice()) {
-      (obj as Phaser.Physics.Arcade.Image).destroy();
-    }
+    // 清场给玩家一个喘息窗口,否则复活即死,广告等于白看。复用错峰清场
+    // 同一套表现(不给分),让玩家觉得那段广告换来的是一次真实的爆炸,
+    // 而不是静默 destroy。
+    const activeHazards = this.hazards.group
+      .getChildren()
+      .filter((obj) => (obj as Phaser.Physics.Arcade.Image).active) as Phaser.Physics.Arcade.Image[];
+    this.staggeredClear(activeHazards, GAME_WIDTH / 2, GAME_HEIGHT / 2);
 
-    this.player.setPosition(GAME_WIDTH / 2, GAME_HEIGHT / 2).setVisible(true).setAlpha(0.4);
-    this.tweens.add({ targets: this.player, alpha: 1, duration: 200, yoyo: true, repeat: 4 });
+    // 死亡序列把除凶手外的所有实体 alpha 降到 dimAlpha。碎片在上面被全清了,
+    // 复用时 spawnOne 会重置 alpha;**能量点不清场,也没有任何地方复位它们** ——
+    // 不补这一段的话,复活后场上已有的能量点会一直半透明,直到 8 秒生存期
+    // 自然过期。表现是"看着像渲染坏了",而且没有任何报错。
+    this.motes.group.getChildren().forEach((obj) => {
+      const mote = obj as Phaser.Physics.Arcade.Image;
+      this.tweens.killTweensOf(mote);
+      mote.setAlpha(1);
+    });
 
-    this.physics.resume();
-    this.nextHazardAt = this.time.now + 1200;
-    this.resolving = false;
+    // 死亡序列里把玩家球 tween 到 scale 0 / alpha 0,respawnAtCenter() 只重置
+    // 位置/可见性/alpha,不重置 scale —— 这里显式补上,否则复活后球会永远
+    // 保持看不见的 scale 0。
+    this.player.sprite.setScale(1);
+    this.player.respawnAtCenter();
+
+    this.bumpSpawnBuffer(RUN.reviveBufferMs);
+    this.phase = 'playing';
 
     platform().gameplayStart();
   }
 
   private finishRun(): void {
-    const { isNewBest } = this.state.finish();
+    const { isNewBest, runsPlayed, previousBest, maxCombo, grazes, motesCollected, pulsesFired, hazardsCleared } =
+      this.state.finish();
     if (isNewBest) {
       platform().happyTime();
     }
 
-    this.time.delayedCall(420, () => {
-      this.scene.start('Result', {
+    // 240ms 定格让震屏和爆炸演完,再交给 fadeToScene 的 200ms 淡出。
+    // 原来是一次性 delayedCall(420) 硬切;直接套上 fade 会变成 620ms,玩家会觉得卡。
+    this.time.delayedCall(DEATH_HOLD_MS, () => {
+      const data: ResultData = {
         score: this.state.score,
         best: this.state.best,
         isNewBest,
         survivedSeconds: Math.floor(this.state.elapsedSeconds),
-      });
-    });
-  }
-
-  // ---------------------------------------------------------------- 表现
-
-  private drawStarfield(): void {
-    const g = this.add.graphics().setDepth(-10);
-    g.fillStyle(THEME.bgAccent, 0.55);
-    for (let i = 0; i < THEME.starfield.count; i++) {
-      g.fillCircle(
-        Phaser.Math.Between(0, GAME_WIDTH),
-        Phaser.Math.Between(0, GAME_HEIGHT),
-        Phaser.Math.Between(THEME.starfield.minRadius, THEME.starfield.maxRadius),
-      );
-    }
-  }
-
-  private playShockwave(): void {
-    const ring = this.add.circle(this.player.x, this.player.y, 10).setDepth(50);
-    ring.setStrokeStyle(4, THEME.entity.pulse, 1);
-    this.tweens.add({
-      targets: ring,
-      radius: PULSE.radius,
-      alpha: 0,
-      duration: 380,
-      ease: 'Cubic.Out',
-      // Arc.radius 是带 updateData() 的 setter,tween 可以直接驱动,无需 onUpdate 回写
-      onComplete: () => ring.destroy(),
-    });
-  }
-
-  private burst(x: number, y: number, color: number, count = 12): void {
-    const emitter = this.add.particles(x, y, 'tex-spark', {
-      speed: { min: 60, max: 230 },
-      lifespan: 420,
-      quantity: count,
-      scale: { start: 0.9, end: 0 },
-      alpha: { start: 1, end: 0 },
-      tint: color,
-      emitting: false,
-    });
-    emitter.explode(count);
-    this.time.delayedCall(600, () => emitter.destroy());
-  }
-
-  private floatText(x: number, y: number, label: string, color: number): void {
-    const text = this.add
-      .text(x, y, label, {
-        fontSize: THEME.font.button,
-        color: `#${color.toString(16).padStart(6, '0')}`,
-        fontStyle: 'bold',
-      })
-      .setOrigin(0.5)
-      .setDepth(120);
-
-    this.tweens.add({
-      targets: text,
-      y: y - 48,
-      alpha: 0,
-      duration: 700,
-      onComplete: () => text.destroy(),
+        runsPlayed,
+        previousBest,
+        maxCombo,
+        grazes,
+        motesCollected,
+        pulsesFired,
+        hazardsCleared,
+      };
+      fadeToScene(this, SCENES.Result, data);
     });
   }
 }

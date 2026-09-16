@@ -12,6 +12,7 @@
     "exactOptionalPropertyTypes": false,
     "isolatedModules": true,
     "noEmit": true,
+    "allowImportingTsExtensions": true,
     "skipLibCheck": true,
     "resolveJsonModule": true,
     "forceConsistentCasingInFileNames": true,

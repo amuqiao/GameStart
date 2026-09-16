@@ -1,17 +1,17 @@
-import Phaser from 'phaser';
-import { GAME_HEIGHT, GAME_WIDTH } from './game/config';
-import { THEME } from './game/theme';
-import { BootScene } from './game/scenes/BootScene';
-import { MenuScene } from './game/scenes/MenuScene';
-import { PlayScene } from './game/scenes/PlayScene';
-import { ResultScene } from './game/scenes/ResultScene';
-import { SettingsScene } from './game/scenes/SettingsScene';
+import { createGame } from './game/main';
 import { initPlatform } from './platform';
-import { LoadingOverlay } from './ui/LoadingOverlay';
+import { LoadingOverlay } from './dom/LoadingOverlay';
 
 /**
- * 启动顺序很重要:**先初始化平台,再创建 Phaser**。
- * 反过来的话 BootScene 里的 platform() 会拿不到 adapter 直接抛。
+ * 浏览器入口。这一层只做三件事:初始化平台、管加载遮罩、把游戏拉起来。
+ *
+ * **启动顺序很重要:先初始化平台,再创建游戏。**
+ * 反过来的话 BootScene 里的 platform() 会拿不到 adapter 直接抛 ——
+ * 这是刻意的"不加兜底":顺序写错就当场炸,而不是静默地跑起一个
+ * 没有平台能力的游戏,等上线后才发现广告和存档全是哑的。
+ *
+ * 注意这个文件**不 import phaser**。引擎只存在于 src/game/ 之内,
+ * 这条边界由 scripts/check-boundaries.mjs 断言。
  */
 async function bootstrap(): Promise<void> {
   const adapter = await initPlatform();
@@ -21,27 +21,16 @@ async function bootstrap(): Promise<void> {
   const loading = new LoadingOverlay(!adapter.capabilities.platformProvidesLoadingUI);
   loading.start();
 
-  const game = new Phaser.Game({
-    type: Phaser.AUTO,
-    parent: 'game-root',
-    width: GAME_WIDTH,
-    height: GAME_HEIGHT,
-    backgroundColor: THEME.bg,
-    scale: {
-      // FIT + CENTER_BOTH:桌面全屏、手机横屏加黑边,两边都不变形。
-      mode: Phaser.Scale.FIT,
-      autoCenter: Phaser.Scale.CENTER_BOTH,
-    },
-    physics: {
-      default: 'arcade',
-      arcade: { gravity: { x: 0, y: 0 }, debug: false },
-    },
-    // 顺序即启动顺序:Boot 跑完自己切到 Menu
-    scene: [BootScene, MenuScene, PlayScene, ResultScene, SettingsScene],
-  });
+  const game = createGame();
 
-  // Boot 场景创建完 = 贴图就绪 = 真正可以开始玩了
-  game.events.once(Phaser.Core.Events.READY, () => loading.finish());
+  // 不能用 Phaser.Core.Events.READY:实测 node_modules/phaser/src/core/Game.js
+  // 的 texturesReady() 里 READY 在 this.start() 之前触发,即任何场景的
+  // preload/create 跑之前就已经发出 —— 现在零素材看不出问题,一旦
+  // BootScene.preload() 开始真实加载素材,遮罩会在素材开始下载前就消失。
+  // 改成监听 BootScene 自己在 create() 末尾发出的信号,确保贴图真的就绪。
+  game.events.once('boot-complete', () => loading.finish());
+  // BootScene 加载真实进度时转发过来,驱动遮罩的进度条。
+  game.events.on('boot-progress', (ratio: number) => loading.setProgress(ratio));
 }
 
 void bootstrap();

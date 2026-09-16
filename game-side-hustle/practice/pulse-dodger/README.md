@@ -1,31 +1,21 @@
 # Pulse Dodger
 
-一个跑得起来的 **Phaser 3.90 + TypeScript + Vite + CrazyGames HTML5 SDK v3** 工程模板,
-附带一款完整可玩的原创小游戏。
+一款用 **Phaser 3.90 + TypeScript + Vite** 写的、接入了 **CrazyGames HTML5 SDK v3**
+的原创小游戏。
+
+**这不是一个模板,不建议整个目录复制粘贴去开新项目。** 它是一份参考:如果你和作者一样是后端
+背景、不熟悉游戏开发,以后要做新游戏时,来读这个仓库、看它在每一层做了什么判断——
+哪层的判断可以直接搬(比如平台适配层怎么和游戏解耦),哪层你必须自己重新想一遍
+(比如玩法数值、场景循环)。判断能复用,代码本身不一定能。
 
 零外部素材:所有贴图在 `BootScene` 里用 `Graphics.generateTexture` 程序生成,
 所有音效用 WebAudio 振荡器合成。因此提交包里**不存在任何来源不明的资源**。
 
 ```
-提交包实测:3 个文件 / 1.17 MB / zip 317.8 KB
+提交包实测(npm run package):3 个文件 / dist 1.20 MB / zip 326.5 KB
 CrazyGames 上限:1500 个文件 / 250 MB / 初始下载 50 MB
 移动端首页推荐位门槛(20 MB):通过
 ```
-
-## UI 外壳(这是模板最值得参考的部分)
-
-大多数 Phaser 模板只给你空场景,外壳要自己画。这里做完了,而且**逻辑和皮肤是分开的**:
-
-| 外壳 | 触发方式 | 平台相关性 |
-| --- | --- | --- |
-| 加载遮罩 | 自动,**加载超过 300ms 才显示** | 平台自带 loading 时不画 |
-| 主页 | 启动后 | — |
-| 暂停面板 | ESC / 右上角按钮 / **窗口失焦自动触发** | — |
-| 设置页 | 主页按钮,**没有可设项时入口都不出现** | 平台自带静音时少一行 |
-| 结算页 | 死亡后 | 插屏广告打在这里 |
-
-**关键机制:UI 由平台能力决定,不是写死的。** 同一份代码在 CrazyGames 上暂停面板是 2 个按钮
-(外框已有静音),在自托管环境是 3 个(多一个音效开关),不需要发行前手动改代码。
 
 ## 玩法
 
@@ -46,107 +36,104 @@ npm run dev        # → http://localhost:8080
 | --- | --- |
 | `npm run dev` | 开发服务器,改代码即时热更新 |
 | `npm run typecheck` | 只做类型检查,不产出文件 |
-| `npm run build` | 类型检查 + 生产构建到 `dist/` |
+| `npm run test` | 跑 `tests/**` 下的单元测试(`node --test`,不需要浏览器) |
+| `npm run check:boundaries` | 只跑依赖边界检查(见下文「五道门」第一道) |
+| `npm run build` | 依次跑边界检查 → 单元测试 → 类型检查 → 生产构建到 `dist/`,任何一步失败都会中止 |
 | `npm run preview` | 本地预览 `dist/` 的构建产物 |
-| `npm run package` | 构建 + 按 CrazyGames 技术要求断言 + 打出提交用 zip |
-| `npm run check:size` | 只跑体积/文件数/相对路径检查,不打包 |
+| `npm run package` | `build` 之后再按 CrazyGames 技术要求断言体积/文件数/结构,并打出提交用 zip |
+| `npm run check:size` | 只跑体积/文件数/相对路径检查,不重新构建、不打包 |
 
-## 单位体系:改一个决策只改一处
+## 目录里装的是什么
 
-整套 UI 按 **960×540 设计单位**写,和实际渲染多少像素解耦。等价于前端的 rem。
+详细的"我想搞懂 X,该按什么顺序读哪几个文件"交给 [`docs/reading-paths.md`](./docs/reading-paths.md)。
+这里只说每个目录**装什么**——不需要读过这个项目也能看懂:
+
+```
+src/main.ts              浏览器入口,不 import phaser
+src/dom/                 用真实 DOM 做的、活在 Phaser 画布之外的界面(比如加载遮罩)
+src/platform/            把发行平台的 SDK 包成本工程自己的接口,游戏代码不直接碰平台全局对象
+src/game/
+  main.ts                createGame():创建 Phaser 实例
+  viewport.ts            画布尺寸 + 设计单位换算 u()
+  tuning.ts              玩法数值(所有要调的数)
+  keys.ts                字符串常量的唯一出处(存档 key、DOM id、贴图 key)
+  theme.ts               视觉 token(颜色/字号/间距/锚点)+ 文案
+  composition.ts         接口到实现的接线(composition root)
+  core/                  游戏规则本身,纯 TS,不 import 引擎,可被 node --test 直接跑
+  scenes/                Phaser 场景 + 场景间怎么跳、跳时传什么
+  objects/               游戏世界里的一类东西:创建、每帧更新、回收都在一个文件里
+  effects/               只改变玩家感官、不改变游戏规则的东西:粒子、震屏、音效
+  hud/                    游戏进行中把玩家状态显示出来的东西,只读不写
+  ui/                    和玩法无关、搬到任何游戏都能用的界面控件
+  overlays/              盖住画面、暂时接管输入、结束后交还控制权的模态流程
+scripts/
+  check-boundaries.mjs   依赖边界断言(见下文)
+  build-zip.mjs          提交包体积/路径/结构断言
+```
+
+关于目录命名多说一句:这套名字(`objects/` `effects/` `hud/` `overlays/`)是从社区惯例来的,
+不是自创。之前用过 `shell/`、`infra/` 这两个名字,调研了 26 个 TypeScript Phaser 仓库,
+两个都是 **0 命中**;`systems/` 命中 1 次,且强指向 ECS 架构(而本项目明确不用 ECS)。
+用自创名的代价是读者得先读你的文档才知道那个词是什么意思——改成社区惯例,是为了让人
+一眼看懂,不用先理解这个项目自己的黑话。
+
+## 五道门
+
+约束不写在会过期的文档里,写在会 `exit 1` 的地方。`npm run package` 依次跑:
+
+```
+check:boundaries → test → tsc --noEmit → vite build → build-zip 断言
+```
+
+任何一道红了都出不了包。第一道 `check:boundaries` 输出的就是一张依赖表
+(`scripts/check-boundaries.mjs`),四条规则,每条教一个不同的判断,不追求覆盖率:
+
+```
+✓ 只有 src/game/** 可以 import phaser
+    引擎依赖是有边界的:dom/ 和 platform/ 换引擎时不用动
+✓ core/ 只依赖 core/ 自身和 tuning
+    规则层为什么能用 node --test 直接跑,不需要浏览器和引擎
+✓ effects/ 不许 import core/
+    依赖是单向的:表现可以被规则驱动,规则不知道表现存在
+✓ platform/ 不许 import game/
+    平台适配层既不知道引擎也不知道游戏,所以能整块搬到别的项目
+```
+
+这个脚本自己也修过一个 bug,值得记一笔:原来目录不存在时是
+`readdir(dir).catch(() => [])`,后果是规则点名的目录一旦被删掉或改名,
+会扫到 0 个文件、打一个 ✓、`exit 0`——**护栏瞎了,但它报告自己很健康**。
+现在改成目录不存在直接 `exit 1`。门禁的第一要务是能发现自己失效,
+而不是"看起来一直是绿的"。
+
+## 单位与数值怎么分层
 
 ```ts
-// config.ts —— 改分辨率只改这一个数
+// viewport.ts —— 改分辨率只改这一个数
 export const RENDER_WIDTH = 1920;
-export const UI_SCALE = RENDER_WIDTH / 960;
+export const UI_SCALE = RENDER_WIDTH / DESIGN_WIDTH; // DESIGN_WIDTH = 960
 export const u = (designUnits: number) => Math.round(designUnits * UI_SCALE);
 ```
 
-空间类数值全部写成 `u(设计单位)`:`radius: u(14)`、`keyboardSpeed: u(420)`、
-字号 `` `${u(62)}px` ``。非空间类(分数、毫秒、阈值)是纯数字,不过 `u()`。
+空间类数值全部写成 `u(设计单位)`:`radius: u(14)`、`keyboardSpeed: u(420)`,
+字号 `` `${u(62)}px` ``。非空间类(分数、毫秒、阈值)是纯数字,不过 `u()`——
+过了的话换分辨率会把游戏平衡一起改掉。
 
-**实测验证过**:把 `RENDER_WIDTH` 从 1920 改成 1280,只改 1 行,
-布局比例完全不变,只是渲染分辨率变了。
+选 1920 的理由:这正好是 CrazyGames 列出的最大 iframe 尺寸(桌面全屏 1920×1080),
+意味着在平台内永远不会被放大,只会被缩小——位图放大会糊,缩小不会。
 
-为什么选 1920:这正好是 CrazyGames 列出的最大 iframe 尺寸(桌面全屏 1920×1080),
-意味着在平台内永远不会被放大,只会被缩小 —— 位图放大会糊,缩小不会。
-某款游戏粒子太重扛不住,把这里调回 960 即可,其余代码一行不动。
-
-## 换皮怎么换
-
-两个文件,职责严格分开:
+三个文件职责分开,是这个项目最值得借鉴的一处分层判断:
 
 ```
-src/game/config.ts   玩法数值 + 单位体系   → 换玩法 / 换分辨率时改
-src/game/theme.ts    视觉与文案            → 换皮时改
+src/game/tuning.ts   玩法数值(速度、分数、充能量……)   → 决定"游戏是什么"
+src/game/theme.ts    颜色/字号/间距/锚点/文案          → 决定"游戏长什么样"
+src/game/viewport.ts 画布尺寸 + 设计单位换算            → 决定"多少像素等于多少设计单位"
 ```
 
-`theme.ts` 里有三套刻度,布局代码**不许出现裸数字**:
+`theme.ts` 里有三套刻度,布局代码不许出现裸数字:`font`(字号)、`space`(间距)、
+`anchor`(纵向锚点,**写成画布高度的比例**,不是绝对像素——这是"改分辨率只改一个数"
+能成立的关键,也让几个页面的标题、主按钮、页脚自动对齐在同一高度上)。
 
-```ts
-font:   { title, heading, score, hudScore, button, body, small }   // type scale
-space:  { xs, sm, md, lg, xl }                                     // spacing scale
-anchor: { heading, title, lead, meta, action, subAction, footer }  // 纵向锚点,**写成画布高度的比例**
-```
-
-`anchor` 是比例而不是绝对像素 —— 这是"改分辨率只改一个数"成立的关键,
-也让几个页面的标题、主按钮、页脚自动对齐在同一高度上。
-
-换个主题只动 `theme.ts`:改 `entity` 四个颜色 + `copy` 里的文案,
-整套 UI 外壳(面板、按钮、HUD、加载条)自动跟着变,一行布局代码都不用碰。
-
-## 目录
-
-```
-src/
-  main.ts                      启动入口。先 initPlatform 再 new Phaser.Game,顺序不能反
-  game/
-    config.ts                  所有可调数值集中在这里
-    core/
-      GameState.ts             一局游戏的规则与存档,不引用任何 Phaser 对象
-      difficulty.ts            难度曲线,纯函数,可单测
-    scenes/
-      BootScene.ts             生成贴图 + 发 loading 信号
-      MenuScene.ts             标题页
-      PlayScene.ts             主玩法
-      ResultScene.ts           结算页 + 插屏广告节奏
-      SettingsScene.ts         设置页,内容由平台能力决定
-    systems/audio.ts           WebAudio 合成音效。三源静音:平台/玩家/广告
-    ui/Hud.ts                  分数与充能条
-    ui/Panel.ts                通用弹出面板(暂停/设置/复活共用)
-    theme.ts                   颜色/字号/间距/锚点/文案 ← 换皮只改这个
-  ui/LoadingOverlay.ts         DOM 层加载遮罩,带 300ms 阈值
-  platform/
-    PlatformAdapter.ts         平台接口。游戏核心只认这个
-    crazygames.d.ts            手写的 SDK v3 类型声明(官方没有 @types)
-    adapters/
-      crazygames.ts            SDK v3 实现
-      web.ts                   本地/自托管实现
-    index.ts                   启动时一次性选定平台
-scripts/build-zip.mjs          提交包检查 + 打包
-docs/
-  qa-checklist.md              提交前逐条过一遍
-  asset-license.csv            素材来源与授权记录
-```
-
-## 参考这个模板时,哪层照抄、哪层重写
-
-这个模板是给你**参考改造**用的,不是一比一复用。按这个来:
-
-| 层 | 怎么处理 | 理由 |
-| --- | --- | --- |
-| `src/platform/` | **直接照抄** | 平台接入逻辑每款游戏完全一样 |
-| `scripts/build-zip.mjs` | **直接照抄** | 提交要求不随游戏变 |
-| `src/ui/LoadingOverlay.ts`、`game/ui/Panel.ts` | **照抄,改 theme** | 外壳的时机和结构是通用的 |
-| `src/game/theme.ts` | **改内容,留结构** | 换皮的全部工作在这 |
-| `src/game/scenes/{Boot,Menu,Settings,Result}` | **照抄骨架,改内容** | 流程一样,文案和布局按需调 |
-| `src/game/config.ts` | **重写** | 玩法数值每款不同 |
-| `src/game/core/` | **重写** | 规则就是你的游戏本身 |
-| `src/game/scenes/PlayScene.ts` | **重写** | 玩法循环 |
-
-照抄的部分约占 40%,是最烦、最容易出错、最不涨知识的那 40%。
-
-## 三条不能破的规矩
+## 五条不能破的规矩
 
 **1. 游戏核心永远不许碰 `window.CrazyGames`。**
 
@@ -185,8 +172,8 @@ Arcade 物理的 velocity 由 Phaser 自己做 delta 修正,不用管;
 **4. 场景切走时必须解绑自己注册的全局监听。**
 
 ```ts
-this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
-  this.game.events.off(Phaser.Core.Events.BLUR, onBlur);
+this.scene.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+  this.scene.game.events.off(Phaser.Core.Events.BLUR, onBlur);
 });
 ```
 
@@ -198,10 +185,18 @@ this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
 `adFinished` → `true` 发奖;`adError`(中途关闭 / 没有库存 / 播放出错)→ `false` 不发奖。
 把 `adError` 当成功会白送奖励,漏掉 `adFinished` 会该发不发。这是整个适配层最容易写错的一行。
 
-## 提交到 CrazyGames
+## 深入阅读
 
-```bash
-npm run package        # → submissions/pulse-dodger.zip
-```
+- [`docs/decisions.md`](./docs/decisions.md) —— 决策记录:每条写清"选了什么 / 放弃了什么 /
+  什么情况下你该选另一个"
+- [`docs/reading-paths.md`](./docs/reading-paths.md) —— 阅读路径:"你想搞懂 X →
+  按这个顺序读这几个文件"
+- [`docs/qa-checklist.md`](./docs/qa-checklist.md) —— 提交前 QA 清单
 
-然后过一遍 `docs/qa-checklist.md`,再上传到 CrazyGames 开发者后台。
+## 诚实的边界
+
+这个项目**没有**提交过 CrazyGames 开发者后台,**没有**在真机、144Hz 屏幕或
+Chromebook 上测过,**没有**找人玩过完整一局。文档里写的那些平台要求(帧率一致性、
+静音联动、低配设备性能)是照着 CrazyGames 的公开技术文档去做的,但从没有被真实环境
+验证过。把这个项目当参考的时候,请把"这里做了什么判断"和"这个判断已经被验证过"
+分开看——目前只有前者。

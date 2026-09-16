@@ -1,8 +1,11 @@
 import Phaser from 'phaser';
-import { GAME_HEIGHT, GAME_WIDTH } from '../config';
+import { GAME_HEIGHT, GAME_WIDTH } from '../viewport';
 import { THEME } from '../theme';
 import { platform } from '../../platform';
-import { audio } from '../systems/audio';
+import { audio } from '../effects/audio';
+import { Button } from '../ui/Button';
+import { SCENES } from './contracts';
+import { fadeInScene, fadeToScene } from './transition';
 
 /**
  * 设置页。
@@ -41,13 +44,14 @@ export function settingsRows(): SettingsRow[] {
 }
 
 export class SettingsScene extends Phaser.Scene {
-  private rowTexts: Phaser.GameObjects.Text[] = [];
+  private rowButtons: Button[] = [];
 
   constructor() {
-    super('Settings');
+    super(SCENES.Settings);
   }
 
   create(): void {
+    fadeInScene(this);
     this.cameras.main.setBackgroundColor(THEME.bg);
     const cx = GAME_WIDTH / 2;
     const y = (ratio: number): number => GAME_HEIGHT * ratio;
@@ -74,24 +78,11 @@ export class SettingsScene extends Phaser.Scene {
     }
 
     rows.forEach((row, index) => {
-      const text = this.add
-        .text(cx, y(THEME.anchor.lead) + index * rowStep, row.label(), {
-          fontSize: THEME.font.body,
-          color: THEME.button.ghostText,
-          backgroundColor: THEME.button.ghostBg,
-          padding: { x: THEME.button.paddingX, y: THEME.space.xs },
-          fixedWidth: THEME.panel.defaultWidth - THEME.space.xl,
-          align: 'center',
-        })
-        .setOrigin(0.5)
-        .setInteractive({ useHandCursor: true });
-
-      text.on('pointerdown', () => {
-        audio.uiClick();
-        row.onClick(this);
+      const button = new Button(this, cx, y(THEME.anchor.lead) + index * rowStep, row.label(), () => row.onClick(this), {
+        variant: 'ghost',
+        fixedWidth: THEME.panel.defaultWidth - THEME.space.xl,
       });
-
-      this.rowTexts.push(text);
+      this.rowButtons.push(button);
     });
 
     this.add
@@ -103,25 +94,15 @@ export class SettingsScene extends Phaser.Scene {
       })
       .setOrigin(0.5);
 
-    const back = this.add
-      .text(cx, y(THEME.anchor.footer), THEME.copy.back, {
-        fontSize: THEME.font.body,
-        color: THEME.button.primaryText,
-        backgroundColor: THEME.button.primaryBg,
-        padding: { x: THEME.button.paddingX, y: THEME.space.xs },
-      })
-      .setOrigin(0.5)
-      .setInteractive({ useHandCursor: true });
-
-    back.on('pointerdown', () => {
-      audio.uiClick();
-      this.scene.start('Menu');
+    new Button(this, cx, y(THEME.anchor.footer), THEME.copy.back, () => fadeToScene(this, SCENES.Menu), {
+      variant: 'primary',
+      paddingY: THEME.space.xs,
     });
   }
 
   /** 切换后就地刷新文案,不用重建整个场景 */
   refresh(): void {
     const rows = settingsRows();
-    rows.forEach((row, index) => this.rowTexts[index]?.setText(row.label()));
+    rows.forEach((row, index) => this.rowButtons[index]?.setLabel(row.label()));
   }
 }

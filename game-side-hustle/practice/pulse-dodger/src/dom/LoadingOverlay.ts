@@ -1,5 +1,3 @@
-import { THEME } from '../game/theme';
-
 /**
  * 加载遮罩。
  *
@@ -62,10 +60,5 @@ export class LoadingOverlay {
       this.el.hidden = true;
     }
     this.shown = false;
-  }
-
-  /** 给 index.html 用的文案,保持和主题层一致 */
-  static get label(): string {
-    return THEME.copy.loading;
   }
 }
