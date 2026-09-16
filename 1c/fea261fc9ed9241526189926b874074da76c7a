@@ -1,0 +1,98 @@
+game-side-hustle/practice/pulse-dodger/src/game/config.ts
+  s_12fa34fbc13edd::t_b8f8a94baa637d 1-88
+game-side-hustle/practice/pulse-dodger/src/game/scenes/SettingsScene.ts
+  s_12fa34fbc13edd::t_b8f8a94baa637d 1-127
+game-side-hustle/practice/pulse-dodger/tests/difficulty.test.ts
+  s_12fa34fbc13edd::t_b8f8a94baa637d 1-43
+game-side-hustle/practice/pulse-dodger/README.md
+  s_12fa34fbc13edd::t_b8f8a94baa637d 1-207
+game-side-hustle/practice/pulse-dodger/src/game/core/difficulty.ts
+  s_12fa34fbc13edd::t_b8f8a94baa637d 1-31
+game-side-hustle/practice/phaser-crazygames-手把手实操教程.md
+  s_12fa34fbc13edd::t_b8f8a94baa637d 1-815
+game-side-hustle/practice/pulse-dodger/src/game/scenes/PlayScene.ts
+  s_12fa34fbc13edd::t_b8f8a94baa637d 1-542
+game-side-hustle/practice/pulse-dodger/src/game/systems/audio.ts
+  s_12fa34fbc13edd::t_b8f8a94baa637d 1-130
+game-side-hustle/practice/pulse-dodger/src/game/ui/Panel.ts
+  s_12fa34fbc13edd::t_b8f8a94baa637d 1-148
+game-side-hustle/practice/pulse-dodger/tsconfig.json
+  s_12fa34fbc13edd::t_b8f8a94baa637d 1-21
+game-side-hustle/practice/pulse-dodger/package.json
+  s_12fa34fbc13edd::t_b8f8a94baa637d 1-26
+game-side-hustle/practice/pulse-dodger/src/game/ui/Hud.ts
+  s_12fa34fbc13edd::t_b8f8a94baa637d 1-83
+game-side-hustle/practice/pulse-dodger/docs/qa-checklist.md
+  s_12fa34fbc13edd::t_b8f8a94baa637d 1-56
+game-side-hustle/practice/pulse-dodger/index.html
+  s_12fa34fbc13edd::t_b8f8a94baa637d 1-64
+game-side-hustle/practice/pulse-dodger/src/platform/adapters/crazygames.ts
+  s_12fa34fbc13edd::t_b8f8a94baa637d 1-132
+game-side-hustle/practice/pulse-dodger/src/platform/adapters/web.ts
+  s_12fa34fbc13edd::t_b8f8a94baa637d 1-64
+game-side-hustle/practice/pulse-dodger/vite/config.prod.mjs
+  s_12fa34fbc13edd::t_b8f8a94baa637d 1-24
+game-side-hustle/practice/pulse-dodger/src/main.ts
+  s_12fa34fbc13edd::t_b8f8a94baa637d 1-47
+game-side-hustle/practice/pulse-dodger/src/platform/PlatformAdapter.ts
+  s_12fa34fbc13edd::t_b8f8a94baa637d 1-76
+.gitignore
+  s_12fa34fbc13edd::t_98e0a8e73a1627 2
+  s_12fa34fbc13edd::t_a33a5994422d38 1
+game-side-hustle/practice/pulse-dodger/src/game/scenes/MenuScene.ts
+  s_12fa34fbc13edd::t_b8f8a94baa637d 1-127
+game-side-hustle/practice/pulse-dodger/.gitignore
+  s_12fa34fbc13edd::t_b8f8a94baa637d 1-4
+game-side-hustle/practice/pulse-dodger/src/game/theme.ts
+  s_12fa34fbc13edd::t_b8f8a94baa637d 1-164
+game-side-hustle/practice/pulse-dodger/src/game/scenes/BootScene.ts
+  s_12fa34fbc13edd::t_b8f8a94baa637d 1-69
+"game-side-hustle/practice/Phaser + CrazyGames 开源项目来源矩阵.md"
+  s_12fa34fbc13edd::t_b8f8a94baa637d 1-453
+game-side-hustle/practice/pulse-dodger/docs/asset-license.csv
+  s_12fa34fbc13edd::t_b8f8a94baa637d 1-6
+game-side-hustle/practice/crazygames-daily-launch-plan.md
+  s_12fa34fbc13edd::t_b8f8a94baa637d 81-191,260-287,643-661,691
+game-side-hustle/practice/pulse-dodger/src/game/scenes/ResultScene.ts
+  s_12fa34fbc13edd::t_b8f8a94baa637d 1-96
+game-side-hustle/practice/pulse-dodger/src/platform/crazygames.d.ts
+  s_12fa34fbc13edd::t_b8f8a94baa637d 1-96
+game-side-hustle/practice/pulse-dodger/vite/config.dev.mjs
+  s_12fa34fbc13edd::t_b8f8a94baa637d 1-7
+game-side-hustle/practice/pulse-dodger/src/platform/index.ts
+  s_12fa34fbc13edd::t_b8f8a94baa637d 1-30
+game-side-hustle/practice/pulse-dodger/src/game/core/GameState.ts
+  s_12fa34fbc13edd::t_b8f8a94baa637d 1-81
+game-side-hustle/practice/pulse-dodger/src/ui/LoadingOverlay.ts
+  s_12fa34fbc13edd::t_b8f8a94baa637d 1-71
+game-side-hustle/practice/pulse-dodger/scripts/build-zip.mjs
+  s_12fa34fbc13edd::t_b8f8a94baa637d 1-119
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.2",
+  "base_commit_sha": "1cfea261fc9ed9241526189926b874074da76c7a",
+  "prompts": {},
+  "sessions": {
+    "s_12fa34fbc13edd": {
+      "agent_id": {
+        "tool": "trae",
+        "id": "6aa6ce8976e8e3e08a3c066b",
+        "model": "Doubao-Seed-2.1-pro__dev"
+      },
+      "human_author": "wangqiao <wangqiao@crazymaplestudio.com>",
+      "custom_attributes": {
+        "tool_name": "Shell",
+        "client_type": "ide",
+        "runtime_client": "trae-tob-git-ai",
+        "display_model_name": "Doubao-Seed-2.1-Pro-0915",
+        "edit_kind": "bash",
+        "external_session_id": "6aa6ce8976e8e3e08a3c066b",
+        "operation_id": "6aaa7732a3f35911dee8efb5",
+        "tool_use_id": "6aaa7732a3f35911dee8efb5",
+        "session_id": "6aa6ce8976e8e3e08a3c066b",
+        "source_scene": "agent"
+      }
+    }
+  }
+}
