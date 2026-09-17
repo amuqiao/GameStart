@@ -206,49 +206,49 @@ export const THEME = {
   /** 所有面向玩家的文案。做多语言时把这一块换成 i18n 查表即可 */
   copy: {
     gameTitle: 'PULSE DODGER',
-    tagline: '躲开红色碎片 · 吃蓝色能量 · 充满后释放冲击波',
-    controls: '鼠标 / 手指移动控制 · 空格或点击释放冲击波 · ESC 暂停',
+    tagline: 'Dodge red shards · collect blue energy · unleash a pulse',
+    controls: 'Move with mouse or touch · click or press Space to pulse · Esc to pause',
     /** 主页操作按钮文案。以前这里是"点击任意位置开始"配一段非交互的闪烁文字,
      * 全屏任意位置的 pointerdown 才是真正的触发源;现在按钮本身就是唯一的
      * 交互入口(见 MenuScene 的按钮状态机改造),文案要换成对应这个按钮的动作。 */
-    startGame: '开始游戏',
-    bestScore: '最高分',
-    settings: '设置',
-    pulseReady: 'PULSE READY — 点击 / 空格',
+    startGame: 'START',
+    bestScore: 'BEST',
+    settings: 'SETTINGS',
+    pulseReady: 'PULSE READY - CLICK / SPACE',
     pauseGlyph: 'II',
-    paused: '已暂停',
-    resume: '继续游戏',
-    quitToMenu: '回到主页',
-    autoPausedHint: '窗口失去焦点,已自动暂停',
+    paused: 'PAUSED',
+    resume: 'RESUME',
+    quitToMenu: 'MENU',
+    autoPausedHint: 'Auto-paused while the window is inactive',
     gameOver: 'GAME OVER',
     newBest: 'NEW BEST!',
-    playAgain: '再来一局',
-    reviveTitle: '看一段广告,原地复活',
-    reviveButton: '看广告复活',
-    reviveCountdown: (n: number) => `${n} 秒后结算`,
-    survivedFor: (s: number, best: number) => `存活 ${s} 秒  ·  最高分 ${best}`,
-    resultTip: '提示:充能满时释放冲击波,一次清掉 4 个以上碎片分数最高',
-    loading: '加载中',
-    soundOn: '音效:开',
-    soundOff: '音效:关',
-    back: '返回',
-    settingsEmptyHint: '当前平台已提供音量控制,游戏内无需重复设置',
+    playAgain: 'PLAY AGAIN',
+    reviveTitle: 'Watch an ad to revive',
+    reviveButton: 'REVIVE',
+    reviveCountdown: (n: number) => `Results in ${n}s`,
+    survivedFor: (s: number, best: number) => `Survived ${s}s  ·  Best ${best}`,
+    resultTip: 'Tip: pulse when charged and clear 4+ shards for the biggest score burst',
+    loading: 'Loading',
+    soundOn: 'Sound: On',
+    soundOff: 'Sound: Off',
+    back: 'BACK',
+    settingsEmptyHint: 'Audio is controlled by this platform',
 
     /** 主页教学图例(用实际游戏贴图建立颜色映射,不依赖玩家读字) */
-    legendDodge: '躲开',
-    legendEat: '吃掉',
-    legendClear: '清场',
+    legendDodge: 'DODGE',
+    legendEat: 'COLLECT',
+    legendClear: 'PULSE',
 
     /**
      * 主页页脚提示,拆成片段是因为"空格"和"ESC"两个词要单独包一层
      * 键帽样式的小方块(ghostBg 底),不能再当一整句纯文本画。
      */
     footerHint: {
-      before: '鼠标 / 手指移动控制 ·',
-      spaceKey: '空格',
-      middle: '或点击释放冲击波 ·',
+      before: 'Move with mouse or touch ·',
+      spaceKey: 'SPACE',
+      middle: 'or click to pulse ·',
       escKey: 'ESC',
-      after: '暂停',
+      after: 'pause',
     },
 
     /**
@@ -262,20 +262,20 @@ export const THEME = {
      * `previousBest` 为 0(首次破纪录,之前从没打过)时没有数字可比,
      * 才退回 `recordBroken` 这句不带数字的庆祝文案。
      */
-    recordBroken: '刷新纪录!',
-    overBest: (n: number) => `超出纪录 ${n} 分`,
-    gapToBest: (n: number) => `差 ${n} 分破纪录`,
+    recordBroken: 'Record broken!',
+    overBest: (n: number) => `${n} over best`,
+    gapToBest: (n: number) => `${n} to best`,
 
     /** 连击倍率标签(HUD,分数正下方) */
     comboLabel: (n: number) => `x${n}`,
 
     /** 首局内嵌引导文案(见 ui/Tutorial.ts) */
-    tutMove: '移动躲开',
-    tutMoveTouch: '拖动移动',
-    tutCollect: '吃掉蓝点',
-    tutCharge: '蓝点 = 充能',
-    tutPulseMouse: '点击释放冲击波',
-    tutPulseKey: '按空格释放',
-    tutPulseTouch: '点击释放冲击波',
+    tutMove: 'Move to dodge',
+    tutMoveTouch: 'Drag to move',
+    tutCollect: 'Collect blue motes',
+    tutCharge: 'Blue motes charge pulse',
+    tutPulseMouse: 'Click to pulse',
+    tutPulseKey: 'Press Space',
+    tutPulseTouch: 'Tap to pulse',
   },
 } as const;

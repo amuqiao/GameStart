@@ -12,7 +12,7 @@
 所有音效用 WebAudio 振荡器合成。因此提交包里**不存在任何来源不明的资源**。
 
 ```
-提交包实测(npm run package):3 个文件 / dist 1.20 MB / zip 326.5 KB
+提交包实测(npm run portal:upload):3 个文件 / dist 1.19 MB / portal-upload 1.19 MB / zip 326.1 KB
 CrazyGames 上限:1500 个文件 / 250 MB / 初始下载 50 MB
 移动端首页推荐位门槛(20 MB):通过
 ```
@@ -21,7 +21,8 @@ CrazyGames 上限:1500 个文件 / 250 MB / 初始下载 50 MB
 
 鼠标或手指移动控制发光球。躲开红色碎片,吃蓝色能量点充能。
 充满后点击或按空格释放冲击波清场,一次清掉 4 个以上会触发平台的 `happytime` 信号。
-被碎片碰到就结束,每局有一次"看广告复活"的机会。
+Basic Launch 提交版禁用广告,被碎片碰到就结束。Full Launch 再恢复广告能力时,可以重新打开
+一次"看广告复活"的机会。
 
 ## 跑起来
 
@@ -40,7 +41,8 @@ npm run dev        # → http://localhost:8080
 | `npm run check:boundaries` | 只跑依赖边界检查(见下文「五道门」第一道) |
 | `npm run build` | 依次跑边界检查 → 单元测试 → 类型检查 → 生产构建到 `dist/`,任何一步失败都会中止 |
 | `npm run preview` | 本地预览 `dist/` 的构建产物 |
-| `npm run package` | `build` 之后再按 CrazyGames 技术要求断言体积/文件数/结构,并打出提交用 zip |
+| `npm run package` | `build` 之后再按 CrazyGames 技术要求断言体积/文件数/结构,并打出离线归档 zip |
+| `npm run portal:upload` | 跑完整检查,再生成 CrazyGames 当前上传区可直接拖拽的 `submissions/portal-upload/` |
 | `npm run check:size` | 只跑体积/文件数/相对路径检查,不重新构建、不打包 |
 
 ## 目录里装的是什么
@@ -68,7 +70,9 @@ src/game/
   overlays/              盖住画面、暂时接管输入、结束后交还控制权的模态流程
 scripts/
   check-boundaries.mjs   依赖边界断言(见下文)
-  build-zip.mjs          提交包体积/路径/结构断言
+  build-zip.mjs          提交包体积/路径/结构断言与离线 zip 归档
+  prepare-portal-upload.mjs
+                         生成 Portal 可拖拽上传目录
 ```
 
 关于目录命名多说一句:这套名字(`objects/` `effects/` `hud/` `overlays/`)是从社区惯例来的,
@@ -192,11 +196,14 @@ this.scene.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
 - [`docs/reading-paths.md`](./docs/reading-paths.md) —— 阅读路径:"你想搞懂 X →
   按这个顺序读这几个文件"
 - [`docs/qa-checklist.md`](./docs/qa-checklist.md) —— 提交前 QA 清单
+- [`docs/submission-ready-checklist.md`](./docs/submission-ready-checklist.md) —— 本次 CrazyGames 提交前收口清单
+- [`docs/submission-log.csv`](./docs/submission-log.csv) —— 打包、材料、Portal Preview、提交状态记录
 
 ## 诚实的边界
 
-这个项目**没有**提交过 CrazyGames 开发者后台,**没有**在真机、144Hz 屏幕或
-Chromebook 上测过,**没有**找人玩过完整一局。文档里写的那些平台要求(帧率一致性、
-静音联动、低配设备性能)是照着 CrazyGames 的公开技术文档去做的,但从没有被真实环境
-验证过。把这个项目当参考的时候,请把"这里做了什么判断"和"这个判断已经被验证过"
-分开看——目前只有前者。
+这个项目**没有**提交过 CrazyGames 开发者后台,**没有**在 144Hz 屏幕或 Chromebook
+上测过,**没有**经过多人试玩。2026-09-17 已有一次用户真机试玩反馈:"玩了一下,
+没啥大问题"。文档里写的那些平台要求(帧率一致性、静音联动、低配设备性能)是照着
+CrazyGames 的公开技术文档去做的,但 Portal Preview、真实 CrazyGames iframe、
+Chromebook 和平台 QA 还没有验证过。把这个项目当参考的时候,请把"这里做了什么判断"
+和"这个判断已经被验证过"分开看。

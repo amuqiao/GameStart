@@ -1,0 +1,67 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8" />
+<style>
+  * { box-sizing: border-box; }
+  html, body { margin: 0; width: 1920px; height: 1080px; overflow: hidden; }
+  body {
+    position: relative;
+    background:
+      radial-gradient(circle at 50% 46%, rgba(94,234,212,.18), transparent 18%),
+      radial-gradient(circle at 28% 20%, rgba(56,189,248,.24), transparent 23%),
+      radial-gradient(circle at 78% 78%, rgba(244,63,94,.20), transparent 24%),
+      linear-gradient(150deg, #080b14 0%, #111827 52%, #0a1020 100%);
+    font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+    color: #e2e8f0;
+  }
+  .star { position: absolute; width: 3px; height: 3px; border-radius: 50%; background: rgba(226,232,240,.55); }
+  .pulse {
+    position: absolute; left: 50%; top: 48%; width: 240px; height: 240px;
+    transform: translate(-50%, -50%);
+    border-radius: 50%;
+    background: radial-gradient(circle, #5eead4 0 24%, rgba(94,234,212,.48) 25% 35%, rgba(94,234,212,.08) 36% 68%, transparent 69%);
+    box-shadow: 0 0 46px rgba(94,234,212,.82), 0 0 140px rgba(250,204,21,.22);
+  }
+  .ring {
+    position: absolute; left: 50%; top: 48%; width: 516px; height: 516px;
+    transform: translate(-50%, -50%);
+    border-radius: 50%;
+    border: 11px solid rgba(250,204,21,.82);
+    box-shadow: 0 0 38px rgba(250,204,21,.35);
+  }
+  .shard {
+    position: absolute;
+    background: linear-gradient(180deg, #fb7185, #be123c);
+    clip-path: polygon(50% 0%, 100% 72%, 50% 100%, 0% 72%);
+    filter: drop-shadow(0 0 20px rgba(244,63,94,.72));
+  }
+  .mote {
+    position: absolute; border-radius: 50%; background: #38bdf8;
+    box-shadow: 0 0 24px rgba(56,189,248,.8);
+  }
+  .title {
+    position: absolute; left: 50%; bottom: 116px;
+    transform: translateX(-50%);
+    width: 92%;
+    text-align: center;
+    font-size: 124px;
+    line-height: .95;
+    font-weight: 900;
+    letter-spacing: 2px;
+    color: #f8fafc;
+    text-shadow: 0 5px 0 rgba(15,23,42,.72), 0 0 30px rgba(94,234,212,.42);
+  }
+</style>
+</head>
+<body>
+  <div class="star" style="left:0px;top:0px;opacity:0.22"></div><div class="star" style="left:137px;top:251px;opacity:0.32"></div><div class="star" style="left:274px;top:502px;opacity:0.42000000000000004"></div><div class="star" style="left:411px;top:753px;opacity:0.52"></div><div class="star" style="left:548px;top:1004px;opacity:0.62"></div><div class="star" style="left:685px;top:175px;opacity:0.22"></div><div class="star" style="left:822px;top:426px;opacity:0.32"></div><div class="star" style="left:959px;top:677px;opacity:0.42000000000000004"></div><div class="star" style="left:1096px;top:928px;opacity:0.52"></div><div class="star" style="left:1233px;top:99px;opacity:0.62"></div><div class="star" style="left:1370px;top:350px;opacity:0.22"></div><div class="star" style="left:1507px;top:601px;opacity:0.32"></div><div class="star" style="left:1644px;top:852px;opacity:0.42000000000000004"></div><div class="star" style="left:1781px;top:23px;opacity:0.52"></div><div class="star" style="left:1918px;top:274px;opacity:0.62"></div><div class="star" style="left:135px;top:525px;opacity:0.22"></div><div class="star" style="left:272px;top:776px;opacity:0.32"></div><div class="star" style="left:409px;top:1027px;opacity:0.42000000000000004"></div><div class="star" style="left:546px;top:198px;opacity:0.52"></div><div class="star" style="left:683px;top:449px;opacity:0.62"></div><div class="star" style="left:820px;top:700px;opacity:0.22"></div><div class="star" style="left:957px;top:951px;opacity:0.32"></div><div class="star" style="left:1094px;top:122px;opacity:0.42000000000000004"></div><div class="star" style="left:1231px;top:373px;opacity:0.52"></div><div class="star" style="left:1368px;top:624px;opacity:0.62"></div><div class="star" style="left:1505px;top:875px;opacity:0.22"></div><div class="star" style="left:1642px;top:46px;opacity:0.32"></div><div class="star" style="left:1779px;top:297px;opacity:0.42000000000000004"></div><div class="star" style="left:1916px;top:548px;opacity:0.52"></div><div class="star" style="left:133px;top:799px;opacity:0.62"></div><div class="star" style="left:270px;top:1050px;opacity:0.22"></div><div class="star" style="left:407px;top:221px;opacity:0.32"></div><div class="star" style="left:544px;top:472px;opacity:0.42000000000000004"></div><div class="star" style="left:681px;top:723px;opacity:0.52"></div><div class="star" style="left:818px;top:974px;opacity:0.62"></div><div class="star" style="left:955px;top:145px;opacity:0.22"></div><div class="star" style="left:1092px;top:396px;opacity:0.32"></div><div class="star" style="left:1229px;top:647px;opacity:0.42000000000000004"></div><div class="star" style="left:1366px;top:898px;opacity:0.52"></div><div class="star" style="left:1503px;top:69px;opacity:0.62"></div><div class="star" style="left:1640px;top:320px;opacity:0.22"></div><div class="star" style="left:1777px;top:571px;opacity:0.32"></div>
+  <div class="shard" style="left:1430px;top:540px;width:28px;height:43.4px;transform:rotate(24deg) skew(-12deg);"></div><div class="shard" style="left:1394.2233802803048px;top:659.2182016382203px;width:40px;height:62px;transform:rotate(47deg) skew(-12deg);"></div><div class="shard" style="left:1292.3401871576773px;top:755.743707977221px;width:52px;height:80.60000000000001px;transform:rotate(69deg) skew(-12deg);"></div><div class="shard" style="left:1139.8612132115923px;top:811.2032851160167px;width:64px;height:99.2px;transform:rotate(92deg) skew(-12deg);"></div><div class="shard" style="left:960px;top:815.0404302040329px;width:28px;height:43.4px;transform:rotate(114deg) skew(-12deg);"></div><div class="shard" style="left:780.1387867884079px;top:766.5247584249853px;width:40px;height:62px;transform:rotate(137deg) skew(-12deg);"></div><div class="shard" style="left:627.6598128423227px;top:674.8910287484803px;width:52px;height:80.60000000000001px;transform:rotate(159deg) skew(-12deg);"></div><div class="shard" style="left:525.7766197196952px;top:557.5813454682077px;width:64px;height:99.2px;transform:rotate(182deg) skew(-12deg);"></div><div class="shard" style="left:490px;top:436.9251252482901px;width:28px;height:43.4px;transform:rotate(204deg) skew(-12deg);"></div><div class="shard" style="left:525.7766197196952px;top:335.88878432200477px;width:40px;height:62px;transform:rotate(226deg) skew(-12deg);"></div><div class="shard" style="left:627.6598128423226px;top:273.70417543735704px;width:52px;height:80.60000000000001px;transform:rotate(249deg) skew(-12deg);"></div><div class="shard" style="left:780.1387867884075px;top:262.2078836319462px;width:64px;height:99.2px;transform:rotate(272deg) skew(-12deg);"></div><div class="shard" style="left:959.9999999999999px;top:303.58818085943585px;width:28px;height:43.4px;transform:rotate(294deg) skew(-12deg);"></div><div class="shard" style="left:1139.8612132115923px;top:389.9684974058812px;width:40px;height:62px;transform:rotate(317deg) skew(-12deg);"></div><div class="shard" style="left:1292.3401871576773px;top:504.90669460199496px;width:52px;height:80.60000000000001px;transform:rotate(339deg) skew(-12deg);"></div><div class="shard" style="left:1394.2233802803046px;top:626.5247584249852px;width:64px;height:99.2px;transform:rotate(361deg) skew(-12deg);"></div>
+  <div class="mote" style="left:460.79999999999995px;top:453.59999999999997px;width:28px;height:28px;"></div>
+  <div class="mote" style="left:1401.6px;top:313.2px;width:22px;height:22px;"></div>
+  <div class="mote" style="left:1267.2px;top:626.4px;width:18px;height:18px;"></div>
+  <div class="ring"></div>
+  <div class="pulse"></div>
+  <div class="title">PULSE DODGER</div>
+</body>
+</html>

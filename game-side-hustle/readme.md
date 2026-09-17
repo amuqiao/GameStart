@@ -83,7 +83,7 @@ PlatformAdapter（平台适配层） / SDK（平台开发包） / 构建
 | --- | --- |
 | 我完全不懂游戏开发，想先扫盲游戏框架、语言、引擎、3A 和完整流程 | [literacy/game-dev-framework-universe.md](literacy/game-dev-framework-universe.md) |
 | 我想搞懂 CrazyGames 是什么、怎么投稿、怎么变现、有哪些坑 | [literacy/CrazyGames.md](literacy/CrazyGames.md) |
-| 我想开始实操，每天做一款 CrazyGames 候选游戏并提交记录 | [practice/crazygames-daily-launch-plan.md](practice/crazygames-daily-launch-plan.md) |
+| 我想开始实操，每天做一款 CrazyGames 候选游戏并提交记录 | [practice/crazygames-daily-launch-plan/crazygames-daily-launch-plan.md](practice/crazygames-daily-launch-plan/crazygames-daily-launch-plan.md) |
 | 我想理解这个副业到底怎么跑 | [01-ai-first-game-mindset.md](01-ai-first-game-mindset.md) |
 | 我想知道 Phaser、Three.js、Blender（3D 建模工具）、Cocos、Unity、Godot 怎么选 | [02-game-tech-stack-map.md](02-game-tech-stack-map.md) |
 | 我想知道海外平台、国内平台、Playable Ads（可试玩广告）怎么接入 | [03-platform-channel-map.md](03-platform-channel-map.md) |
@@ -105,7 +105,7 @@ PlatformAdapter（平台适配层） / SDK（平台开发包） / 构建
 - [07-links-and-open-source-demos.md](07-links-and-open-source-demos.md)：开源项目、官方文档、Playable Ads（可试玩广告）、素材工具链接。
 - [literacy/CrazyGames.md](literacy/CrazyGames.md)：CrazyGames 平台扫盲、上线流程、SDK（平台开发包）、收益和审核风险。
 - [literacy/game-dev-framework-universe.md](literacy/game-dev-framework-universe.md)：游戏开发框架、语言、引擎、资产、3A 流程扫盲。
-- [practice/crazygames-daily-launch-plan.md](practice/crazygames-daily-launch-plan.md)：一天一款 CrazyGames 候选游戏的 AI-first 实操计划、开源学习源和提交清单。
+- [practice/crazygames-daily-launch-plan/crazygames-daily-launch-plan.md](practice/crazygames-daily-launch-plan/crazygames-daily-launch-plan.md)：一天一款 CrazyGames 候选游戏的 AI-first 实操计划、开源学习源和提交清单。
 
 ## 七个主题的产出物
 

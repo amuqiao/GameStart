@@ -4,3 +4,7 @@ date,asset_name,type,source_url,license,used_in,modified,commercial_allowed,note
 2026-09-16,tex-mote,image,generated-in-code,N/A-self-made,Pulse Dodger,yes,yes,同上
 2026-09-16,tex-spark,image,generated-in-code,N/A-self-made,Pulse Dodger,yes,yes,粒子贴图,程序生成
 2026-09-16,sfx-all,audio,generated-in-code,N/A-self-made,Pulse Dodger,yes,yes,WebAudio 振荡器合成,无音频文件
+2026-09-17,submission-screenshots,image,generated-from-local-game,N/A-self-made,Pulse Dodger CrazyGames submission,yes,yes,Chrome CDP 截取本地 production preview 的菜单/玩法/结算画面
+2026-09-17,submission-covers,image,generated-from-local-html,N/A-self-made,Pulse Dodger CrazyGames submission,yes,yes,本地 HTML/CSS 原创封面图,仅包含游戏名,三种尺寸
+2026-09-17,submission-preview-video,video,generated-from-local-game,N/A-self-made,Pulse Dodger CrazyGames submission,yes,yes,Chrome CDP 截取玩法帧后用 ffmpeg 合成 18 秒无声横版 MP4
+2026-09-17,submission-preview-video-portrait,video,generated-from-local-game,N/A-self-made,Pulse Dodger CrazyGames submission,yes,yes,由横版 preview 视频居中裁切并缩放生成 18 秒无声竖版 MP4

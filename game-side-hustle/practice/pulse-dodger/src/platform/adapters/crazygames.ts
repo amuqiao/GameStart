@@ -12,9 +12,10 @@ export class CrazyGamesAdapter implements PlatformAdapter {
   readonly name = 'crazygames';
 
   readonly capabilities: PlatformCapabilities = {
-    interstitialAds: true,
-    rewardedAds: true,
-    banners: true,
+    // Basic Launch 不允许广告。Full Launch 再把这三个能力打开,并重新测广告 QA。
+    interstitialAds: false,
+    rewardedAds: false,
+    banners: false,
     cloudSave: true,
     // 播放器外框有喇叭按钮,SDK 通过 settings.muteAudio 把状态给你
     platformProvidesAudioToggle: true,
@@ -60,54 +61,28 @@ export class CrazyGamesAdapter implements PlatformAdapter {
   }
 
   /**
-   * 插屏广告。requestAd 是回调式的,这里包成 Promise。
-   * adError 在"播放出错"和"当前没有广告库存"两种情况下都会触发,
-   * 对插屏而言两者处理方式相同:结束等待,让游戏继续。
+   * Basic Launch 版本不请求广告。否则 Developer Portal 会报
+   * "Ads were detected" 并拒绝 Basic 提交。
    */
-  showInterstitial(reason: string): Promise<void> {
-    return new Promise<void>((resolve) => {
-      this.sdk.ad.requestAd('midgame', {
-        adStarted: () => console.info(`[ad] midgame 开始: ${reason}`),
-        adFinished: () => {
-          console.info(`[ad] midgame 播放完成: ${reason}`);
-          resolve();
-        },
-        adError: (error) => {
-          console.info(`[ad] midgame 未播放(无库存或出错): ${reason}`, error);
-          resolve();
-        },
-      });
-    });
+  async showInterstitial(reason: string): Promise<void> {
+    console.info(`[ad] Basic Launch 禁用插屏广告: ${reason}`);
   }
 
   /**
-   * 激励视频。返回值直接决定发不发奖 —— 这是整个适配层最关键的一行逻辑。
-   *   adFinished -> true : 玩家完整看完了,发奖
-   *   adError    -> false: 中途关闭 / 无库存 / 出错,**不发奖**
-   * 把 adError 也当成 true 会导致奖励白送;把 adFinished 漏掉会导致该发不发。
+   * Basic Launch 版本不请求激励视频,所以不会发奖。Full Launch 再恢复
+   * requestAd('rewarded') 并重新测"看完才发奖"。
    */
-  showRewarded(reason: string): Promise<boolean> {
-    return new Promise<boolean>((resolve) => {
-      this.sdk.ad.requestAd('rewarded', {
-        adStarted: () => console.info(`[ad] rewarded 开始: ${reason}`),
-        adFinished: () => {
-          console.info(`[ad] rewarded 看完,发奖: ${reason}`);
-          resolve(true);
-        },
-        adError: (error) => {
-          console.info(`[ad] rewarded 未完成,不发奖: ${reason}`, error);
-          resolve(false);
-        },
-      });
-    });
+  async showRewarded(reason: string): Promise<boolean> {
+    console.info(`[ad] Basic Launch 禁用激励视频,不发奖: ${reason}`);
+    return false;
   }
 
-  async showBanner(containerId: string): Promise<void> {
-    await this.sdk.banner.requestResponsiveBanner(containerId);
+  async showBanner(_containerId: string): Promise<void> {
+    console.info('[ad] Basic Launch 禁用 banner');
   }
 
   clearBanners(): void {
-    this.sdk.banner.clearAllBanners();
+    console.info('[ad] Basic Launch 无 banner 需要清理');
   }
 
   /** 走 SDK 的 data 模块 = 云存档,玩家换设备进度还在。同步 API,与 localStorage 一致。 */

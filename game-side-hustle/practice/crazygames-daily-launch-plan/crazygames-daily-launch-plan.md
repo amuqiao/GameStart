@@ -1,6 +1,6 @@
 # CrazyGames 一日上架作战手册
 
-Last checked：2026-09-16
+Last checked：2026-09-17
 
 一句话定位：这不是“每天一款”的口号清单，而是一份指导你完成“一款 HTML5 游戏开发、CrazyGames SDK 接入、构建、预览、提交、QA 跟进、Basic Launch 公开可玩验证、数据观察、更新、Full Launch/变现准备”的执行手册。
 
@@ -78,6 +78,251 @@ Idea（选题）
 
 所以本文不是承诺“今天一定公开上线”，而是指导你把开发者可控部分做到足够完整，并把平台不可控部分转成明确跟进动作。
 
+## 本次真实提交复盘：Pulse Dodger
+
+本次 `Pulse Dodger` 已完成从本地 build 到 Developer Portal 提交的 M0/M1 链路，当前处于审核等待态：
+
+```text
+M0 Submission Ready：完成。
+M1 Submitted：完成。
+M2 Accepted / Basic Launch：等待 CrazyGames review。
+M3 Public Playable：等待正式 CrazyGames 游戏页。
+M4 Full Launch Ready：后续根据 Basic Launch 数据推进。
+```
+
+当前 Portal 看到的状态：
+
+```text
+My Games -> pulse-dodger
+Game status: Awaiting review
+Detail page notification: Waiting for review
+Version History: Submitted
+```
+
+这代表“提交成功，等待审核”，不代表已经公开上架。此阶段可以在 Developer Portal 的 Preview 里玩，也可以本地继续测试，但普通玩家通常还不能在 CrazyGames 正式站搜索到或打开你的游戏。
+
+### 图源维护规则
+
+`.data/` 只作为临时截图池，不作为长期文档图源。进入本文的截图统一放到当前文档旁边的 `assets/`：
+
+```text
+game-side-hustle/practice/crazygames-daily-launch-plan/
+  crazygames-daily-launch-plan.md
+  assets/
+```
+
+维护原则：
+
+```text
+1. 图片必须重命名，使用步骤序号 + 英文语义名。
+2. 不在文档里引用 image copy.png 这类临时文件名。
+3. Portal 流程截图放 `assets/`。
+4. 游戏提交素材继续放具体游戏项目的 materials/。
+5. 替换同一页面截图时优先保持同名文件，减少文档链接漂移。
+```
+
+截图索引：
+
+| 步骤 | 截图 | 说明 |
+| --- | --- | --- |
+| Upload | [01-upload-step.png](./assets/01-upload-step.png) | Submit Your Game 第 1 步，填写 game name、engine、save progress、game options |
+| Preview | [02-preview-tool-runtime.png](./assets/02-preview-tool-runtime.png) | Portal Preview 运行态，右侧会显示 SDK requirements |
+| QA warning | [03-qa-results-ads-warning.png](./assets/03-qa-results-ads-warning.png) | Basic Launch 中触发 ads SDK 的错误示例 |
+| QA clean | [04-qa-results-clean.png](./assets/04-qa-results-clean.png) | 移除 Basic ads 调用后的 QA Results |
+| Details | [05-game-details-form.png](./assets/05-game-details-form.png) | 填 category、tags、description、controls、cover、video |
+| Finalize | [06-finalize-submission.png](./assets/06-finalize-submission.png) | 勾选 Terms 和 PEGI 12 后提交 |
+| My Games | [07-my-games-awaiting-review.png](./assets/07-my-games-awaiting-review.png) | 列表页 Awaiting review 状态 |
+| Game detail | [08-game-detail-awaiting-review.png](./assets/08-game-detail-awaiting-review.png) | 游戏详情页 Waiting for review 和 Version History |
+
+## 已有小游戏的上架分诊
+
+如果你已经写好了小游戏，不要再从“创建工程模板”开始。先做分诊。
+
+```text
+第一问：我现在只想最快提交 Basic Launch，还是想顺手打通后续 Full Launch/变现？
+第二问：游戏现在能不能 production build，并且 Portal 上传目录根部有 index.html？
+第三问：游戏有没有英文界面、开始/游玩/结算/重试完整流程？
+第四问：素材来源和商用授权是否能说清？
+第五问：手机端是否真的可玩？
+```
+
+### 是否需要接入 SDK
+
+结论：
+
+```text
+只求 Basic Launch：SDK 可选，可以先不接。
+想进入 Full Launch / 变现 / 平台数据更完整：必须接 SDK。
+已经有开发能力并且愿意多花半天：建议至少接 game module，不急着暴露广告按钮。
+```
+
+怎么选：
+
+| 你的目标 | SDK 决策 | 提交策略 |
+| --- | --- | --- |
+| 今天最快提交 Basic | 可以不接 SDK | 重点保证 build、玩法、移动端、封面、metadata、无侵权 |
+| 想顺手打通平台链路 | 接最小 SDK | 只接 init、loading、gameplayStart/Stop、muteAudio，不做复杂广告 UI |
+| 想准备 Full Launch 和收入 | 接完整 SDK | 补 ads、banner、game events、muteAudio、data/user 视游戏需要 |
+| 游戏还很粗糙 | 先不接广告 | 先修可玩性和 QA，广告按钮失败会增加拒审风险 |
+
+最小 SDK 接入范围：
+
+```text
+必须：
+  index.html 加载 SDK v3 script
+  await window.CrazyGames.SDK.init()
+  检查 environment
+  loadingStart / loadingStop
+  gameplayStart / gameplayStop
+  muteAudio settings + listener
+
+可选：
+  happytime
+  report progress
+  data module 云存档
+  rewarded / midgame ads
+  banners
+```
+
+Basic 阶段最容易踩的坑：
+
+```text
+接了 Ads SDK，但 Basic Launch 广告禁用，按钮点了没效果。
+接了 mute audio 选项，但游戏没有响应 CrazyGames 播放器静音。
+接了 SDK，但在 disabled environment 直接崩。
+gameplayStart 太早触发，导致 initial download size 统计失真。
+gameplayStop 漏掉，平台以为玩家一直在玩。
+```
+
+### 已有游戏最短上架路径
+
+如果你的游戏已经可玩，按这个顺序做：
+
+```text
+1. 先跑 production build。
+2. 检查 Portal 上传目录结构：index.html 必须在根目录。
+3. 做 English UI / instructions / short description / long description。
+4. 准备 3 张截图、3 个 cover、横版和竖版 preview video。
+5. 检查素材 license。
+6. 决定 SDK 策略：不接 / 最小接 / 完整接。
+7. 本地 localhost 测一局。
+8. 真机测一局。
+9. Developer Portal 选 Basic + HTML5。
+10. Preview tool 完整玩一局。
+11. 提交。
+12. 等 Initial QA，按反馈重提。
+```
+
+已有 Phaser 项目建议直接对照这篇实操教程补 SDK 和打包脚本：[phaser-crazygames-手把手实操教程.md](../phaser-crazygames-手把手实操教程.md)。
+
+### 真机测试通过后的下一步
+
+你现在的位置：
+
+```text
+已完成：真实手机上玩过一局，主流程没有明显问题。
+下一步：不要继续加玩法，进入 M0 Submission Ready 收口。
+目标：把 demo 变成 CrazyGames 可提交包。
+```
+
+这一阶段只做 6 件事：
+
+```text
+1. 冻结玩法 scope。
+2. 补齐英文界面和提交文案。
+3. 决定 SDK 策略。
+4. 生成 production build、Portal 上传目录和本地归档 zip。
+5. 准备截图、cover、横版/竖版 preview video、license 记录。
+6. 在 Developer Portal Preview 完整玩一局后提交。
+```
+
+不要再做：
+
+```text
+新增第二套玩法。
+新增复杂关卡系统。
+新增账号、排行榜、多人、IAP。
+临时换技术栈。
+为了“更完整”加广告按钮但没有处理 Basic Launch 禁用。
+```
+
+### M0 Submission Ready 收口清单
+
+真机测过后，用这张表判断能不能进 Portal。
+
+| 项目 | 必须状态 | 记录位置 |
+| --- | --- | --- |
+| 游戏主流程 | 开始、游玩、失败/胜利、结算、重试都完整 | 项目内 `docs/submission-ready-checklist.md` |
+| 英文界面 | 所有玩家可见文案是英文，不出现中文测试文案 | 项目内 `docs/submission-ready-checklist.md` |
+| 手机端 | 真机至少完整玩一局，触摸、音频、布局无明显问题 | 项目内 `docs/submission-ready-checklist.md` |
+| 桌面端 | Chrome 桌面完整玩一局，控制台无 error | 项目内 `docs/submission-ready-checklist.md` |
+| Build | `npm run build` 成功，`dist/` 可静态预览 | 项目内 `docs/submission-log.csv` |
+| Portal upload | `index.html` 在上传目录根部，资源路径相对 | 项目内 `docs/submission-log.csv` |
+| 包体 | total size、initial size、file count 已记录 | 项目内 `docs/submission-log.csv` |
+| SDK | 决定不接、最小接或完整接，并记录原因 | 项目内 `docs/submission-ready-checklist.md` |
+| 素材 | 所有图片、音效、字体、模型来源可解释 | 项目内 `docs/asset-license.csv` |
+| 截图 | 菜单、游玩中、结算页至少 3 张 | 项目内 `docs/submission-log.csv` |
+| Cover | landscape、portrait、square 三套封面 | 项目内 `docs/submission-log.csv` |
+| Preview videos | 横版和竖版各 15-20 秒，展示真实玩法，无声音、无促销文字 | 项目内 `docs/submission-log.csv` |
+| Portal | Basic + HTML5，按真实能力勾选 mobile / muteAudio | 项目内 `docs/submission-log.csv` |
+
+### 现在是否该接 SDK
+
+如果你想最快提交：
+
+```text
+可以先不接 SDK，按 Basic + HTML5 提交。
+代价：没有 SDK gameplay events，未接 Full Launch / 广告变现链路。
+适合：你想先验证 CrazyGames QA 和 Basic Launch 流程。
+```
+
+如果你想把这个 demo 做成后续模板：
+
+```text
+建议接最小 SDK。
+范围：init、environment、loadingStart/Stop、gameplayStart/Stop、muteAudio。
+暂不暴露：rewarded ad / midgame ad 按钮。
+适合：你想让下一款游戏直接复用平台层。
+```
+
+如果你已经按手把手教程接好了 SDK：
+
+```text
+不要继续扩 SDK 功能。
+先确认 localhost 日志、Preview tool 行为、muteAudio、gameplayStart/Stop 都正常。
+广告可以接在适配层，但 Basic 阶段不要让无效广告按钮出现在 UI 上。
+```
+
+### 当前 demo 推进记录
+
+每次推进都在这里留一条状态，避免凭感觉判断“差不多了”。
+
+```csv
+date,game_name,stage,mobile_playtest,desktop_playtest,sdk_strategy,build_ready,assets_checked,materials_ready,portal_preview,submitted,next_action
+2026-09-17,Pulse Dodger,awaiting_review,yes_user_reported,portal_preview_passed,basic_sdk_no_ads,yes,yes_self_made,yes,yes,yes,wait_for_crazygames_review
+```
+
+本次项目级复用材料：
+
+```text
+pulse-dodger/docs/submission-ready-checklist.md：一款游戏提交前逐项收口。
+pulse-dodger/docs/submission-log.csv：每次打包、材料、Portal Preview、提交状态留痕。
+pulse-dodger/docs/asset-license.csv：素材来源和商用授权留痕。
+pulse-dodger/materials/：metadata、3 张截图、3 套 cover、18 秒横版/竖版 preview videos。
+pulse-dodger/submissions/portal-upload/：当前 Portal 需要拖拽上传的 HTML5 文件目录。
+pulse-dodger/submissions/pulse-dodger.zip：离线归档包；如果 Portal 提示 archive files are not supported，不上传它。
+crazygames-daily-launch-plan/assets/：本文使用的 Portal 流程截图，已从 .data 临时截图重命名后归档。
+```
+
+下一步建议：
+
+```text
+当前不要重复创建 Submit a game。
+每天检查 Developer Portal 状态和注册邮箱。
+如果审核通过：拿正式 CrazyGames 游戏页，在桌面和手机各完整玩一局。
+如果被退回：只按 QA feedback 修复，重新 build、Preview、Submit。
+```
+
 ## Submit a game 心智模型
 
 `Submit a game` 不是一个普通上传表单。它本质上是在问 CrazyGames 审核团队 5 个问题：
@@ -85,7 +330,7 @@ Idea（选题）
 | 根本问题 | 通俗说法 | 你要给出的答案 | 常用度 |
 | --- | --- | --- | --- |
 | 这个游戏怎么运行 | 平台怎么加载你的游戏 | 选择 engine（引擎）/ hosting（托管方式），上传 web build 或提供 iframe | 地基 |
-| 这个游戏像不像成品 | QA 要不要放行 | 提供可玩的 build、英文 metadata、controls、截图、cover、preview video | 地基 |
+| 这个游戏像不像成品 | QA 要不要放行 | 提供可玩的 build、英文 metadata、controls、截图、cover、preview videos | 地基 |
 | 这个游戏能不能在目标设备玩 | 玩家打开会不会白屏/卡死/无法操作 | 声明 mobile、orientation、输入方式，并通过 Preview 和真机测试 | 地基 |
 | 这个游戏有没有平台义务 | 你勾选了什么，平台就会测什么 | save progress、multiplayer、mute audio、SDK、ads、account integration | 地基 |
 | 这个游戏能不能上线后增长 | Basic Launch 后值不值得继续推 | cover、首屏、玩法、retention、conversion、feedback、更新能力 | 进阶 |
@@ -105,11 +350,196 @@ Idea（选题）
 ```text
 Launch tab：Basic
 Game engine：HTML5
-Save progress：No, the game does not need progress save
+Save progress：如果只是 localStorage，选 No；如果已接 CrazyGames data module，按真实能力选 Yes
 Supports mobile devices：只有真机触摸测过才勾
 Online multiplayer：No
 Supports CrazyGames muting audio through SDK：只有实现并测试 muteAudio 后才勾
 Hosting：上传 HTML5 build，不走 externally hosted iframe
+```
+
+对 `Pulse Dodger` 当前项目，建议选择：
+
+```text
+Launch tab：Basic
+Game engine：HTML5
+Game name：Pulse Dodger
+Save progress：Yes, using the Data Module from the CrazyGames SDK
+Supports mobile devices：Yes
+Online multiplayer：No
+Supports CrazyGames muting audio through SDK：Yes
+Hosting：上传 HTML5 build files；如果 Portal 不支持 archive，就拖 dist/ 或 submissions/portal-upload/ 里的文件
+```
+
+### Portal 四步详细流程
+
+CrazyGames 的 `Submit a game` 当前按 4 个步骤推进：
+
+```text
+1 Upload：上传 build，并声明游戏能力。
+2 QA：平台预览和 Basic Launch 要求检查。
+3 Details：填写商店页资料，上传 cover 和 preview videos。
+4 Submit：确认条款、年龄适配、Billing，然后提交审核。
+```
+
+#### Step 1：Upload
+
+![CrazyGames Upload step](./assets/01-upload-step.png)
+
+`Pulse Dodger` 这次的实际填写：
+
+| 字段 | 选择 / 填写 |
+| --- | --- |
+| Launch tab | `Basic` |
+| Game name | `Pulse Dodger` |
+| Game engine | `HTML5` |
+| Save progress | `Yes, using the Data Module from the CrazyGames SDK` |
+| Supports mobile devices | 勾选 |
+| Online multiplayer | 不勾选 |
+| Supports CrazyGames muting audio through SDK | 勾选 |
+| Upload files | 拖 `submissions/portal-upload/` 里的 `index.html` 和 `assets/` |
+
+关键坑：
+
+```text
+不要上传 pulse-dodger.zip。
+如果 Portal 提示 Archive files are not supported，就打开 portal-upload 目录，直接拖 index.html 和 assets/。
+```
+
+#### Step 2：Preview 和 QA Results
+
+Preview 运行态：
+
+![CrazyGames Preview tool runtime](./assets/02-preview-tool-runtime.png)
+
+Basic Launch 中错误触发 ads SDK 的警告：
+
+![CrazyGames QA ads warning](./assets/03-qa-results-ads-warning.png)
+
+移除 Basic ads 调用后的 QA Results：
+
+![CrazyGames QA clean results](./assets/04-qa-results-clean.png)
+
+这一步先点 `Preview`，在 CrazyGames 提供的 QA preview 环境完整玩一局。通过后回到 `QA Results`，按真实结果选择：
+
+| QA 项 | `Pulse Dodger` 当前选择 |
+| --- | --- |
+| First gameplay start implemented correctly | `Yes` |
+| Complies to Gameplay requirements | `Yes` |
+| Runs on all CrazyGames domains | `Yes` |
+| Browser checks | `Yes` |
+| Device checks: Mobile | `Yes`，前提是真机或二维码测过 |
+| No external ads | `Yes` |
+| Does not offer external login options | `Yes` |
+| In-game mention of Terms & Conditions and/or Privacy Policy | `N/A` |
+
+这次实际踩坑：
+
+```text
+Basic Launch 阶段如果检测到 ads SDK 调用，页面会提示 Ads were detected。
+Basic 阶段不要触发 requestAd、requestResponsiveBanner、clearAllBanners 等广告相关调用。
+广告代码可以留在适配层设计里，但 Basic 提交 build 不能调用广告 SDK。
+```
+
+通过标准不是“右侧全部都是绿色”。有些 SDK 功能你没有实现就不会出现，重点是当前 Basic 必需项不报 blocker，不出现会导致拒审的 warning。
+
+#### Step 3：Game details
+
+![CrazyGames Game details form](./assets/05-game-details-form.png)
+
+这一页是商店页资料，不是游戏运行配置。`Pulse Dodger` 这次按下面填：
+
+| 字段 | 填写 / 上传 |
+| --- | --- |
+| Category | `Arcade` |
+| Tags | 优先选 `Avoid`、`Skill`、`Survival`、`2D`、`Singleplayer`；没有就选接近项 |
+| Description | 使用 `materials/metadata.md` 的 long description |
+| Controls | 用纯文本，不用 Markdown 列表 |
+| Google Play Store | 留空 |
+| iOS App Store | 留空 |
+| Steam | 留空 |
+| Marketing creatives URL | 留空 |
+| Landscape cover | `pulse-dodger/materials/covers/landscape-1920x1080.png` |
+| Portrait cover | `pulse-dodger/materials/covers/portrait-800x1200.png` |
+| Square cover | `pulse-dodger/materials/covers/square-800x800.png` |
+| Landscape video | `pulse-dodger/materials/videos/preview.mp4` |
+| Portrait video | `pulse-dodger/materials/videos/preview-portrait.mp4` |
+| Mobile orientation | 保持 Portal 当前 build 的 orientation |
+| The game works well in fullscreen | 勾选 |
+
+`Controls` 建议粘贴成一段纯文本：
+
+```text
+Desktop: Move with mouse. Click or press Space to release a pulse. Press Esc to pause.
+
+Mobile: Drag to move. Tap to release a pulse when charged.
+```
+
+不要粘贴这种带缩进的 Markdown 列表：
+
+```text
+Desktop:
+  - Move with mouse.
+  - Click or press Space to release a pulse.
+```
+
+原因：Portal 的富文本编辑器可能把缩进、列表或换行解析成异常格式；纯文本最稳。
+
+#### Step 4：Finalize submission
+
+![CrazyGames Finalize submission](./assets/06-finalize-submission.png)
+
+这一步只做最终确认：
+
+```text
+1. 勾选同意 Developer Portal Terms & Conditions。
+2. 勾选确认游戏适合 12 岁及以上玩家，并符合 PEGI 12。
+3. 点击 Submit for approval。
+```
+
+`Pulse Dodger` 当前是无血腥、无赌博、无成人内容、无聊天社交、无外部登录的街机闪避游戏，按当前内容可以确认 PEGI 12。
+
+如果点击提交时报：
+
+```text
+Error fetching payment details, please ensure you have completed billing details in the Billing tab.
+```
+
+处理路径：
+
+```text
+Account -> Billing
+完成 Tipalti onboarding
+Payment method 可以先选择 Hold Payments
+Tax/VAT 如果没有欧盟 VAT number，选择 I am not VAT registered in the European Union
+看到 Done / You are all set 后，回到游戏提交页重新 Submit
+```
+
+注意：`Hold Payments` 不是放弃收入，而是先挂账不打款。第一款游戏的目标是先跑通提交审核链路，正式收款方式可以后续再补。
+
+#### 提交成功后怎么看
+
+My Games 列表状态：
+
+![CrazyGames My Games awaiting review](./assets/07-my-games-awaiting-review.png)
+
+游戏详情页状态：
+
+![CrazyGames game detail awaiting review](./assets/08-game-detail-awaiting-review.png)
+
+看到下面状态，表示提交成功但还没有公开上线：
+
+```text
+Game status: Awaiting review
+Notification: Waiting for review
+Version History: Submitted
+```
+
+这一阶段的正确理解：
+
+```text
+可以做：本地继续测试、Portal Preview 复测、等待邮件和 Portal 反馈。
+不能做：在 CrazyGames 正式站搜索到游戏、让普通玩家直接打开正式游戏页。
+不能宣称：已经公开上架、已经开始变现。
 ```
 
 为什么 `Game engine` 选 `HTML5`：
@@ -146,7 +576,7 @@ CrazyGames 支持很多引擎，不代表第一天都要学。
 
 | 材料 | 用途 | 第一款怎么准备 |
 | --- | --- | --- |
-| Game build | 平台实际运行的游戏包 | `npm run build` 后把 `dist/` 压成 ZIP，根目录有 `index.html` |
+| Game build | 平台实际运行的游戏文件 | `npm run portal:upload` 后拖 `submissions/portal-upload/` 里的 `index.html` 和 `assets/` |
 | Game name | 平台展示和审核识别 | 英文、35 字符以内、和游戏内标题一致 |
 | Game engine | 决定 QA 和运行路径 | 选 `HTML5` |
 | Metadata | 玩家和 QA 理解玩法 | short description、long description、instructions、controls |
@@ -154,7 +584,7 @@ CrazyGames 支持很多引擎，不代表第一天都要学。
 | Orientation | 平台如何要求玩家旋转设备 | 按实际体验选 portrait / landscape / both |
 | Screenshots | 证明游戏真实可玩 | 至少准备菜单、游玩中、结算页 |
 | Cover images | 商店橱窗点击率 | 准备 landscape、portrait、square 三套封面 |
-| Preview video | 鼠标悬停/卡片预览 | 15-20 秒真实玩法视频，不要黑屏、logo 过场、鼠标光标和营销字 |
+| Preview videos | 鼠标悬停/卡片预览 | 横版和竖版各 15-20 秒真实玩法视频，不要黑屏、logo 过场、鼠标光标和营销字 |
 | SDK evidence | 证明平台接入没破坏体验 | qa-report 记录 init、environment、gameplayStart/Stop、广告失败恢复 |
 | Asset license | 证明不是侵权或搬运 | `asset-license.csv` 记录素材来源和商用许可 |
 
@@ -172,7 +602,7 @@ QA step:
   平台检查 build、SDK、设备、性能、路径、资源、广告、静音、移动端。
 
 Details step:
-  description、instructions、category、orientation、cover、screenshots、preview video。
+  description、instructions、category、orientation、cover、screenshots、preview videos。
 
 Submit step:
   确认所有材料和 QA 结果后正式提交。
@@ -297,7 +727,18 @@ Unity/Godot/Cocos/Construct/GDevelop：除非你的项目确实由这些引擎�
 
 ### 00:30-01:15：创建工程模板
 
-只用一个模板源：
+如果你已经有游戏，这一段改成“现有项目体检”：
+
+```text
+npm run build 能不能过
+dist/ 里有没有 index.html
+静态服务打开 dist/ 是否可玩
+资源路径是否都是相对路径
+是否有英文标题、菜单、玩法、结算、重试
+是否能在手机浏览器完整玩一局
+```
+
+如果你还没有项目，才创建工程模板。只用一个模板源：
 
 ```text
 https://github.com/phaserjs/template-vite-ts
@@ -341,7 +782,16 @@ docs/
 
 ### 01:15-02:45：先接 CrazyGames SDK，再写玩法
 
-原因：你的目标是打通平台链路，SDK 不是最后补丁。先把平台适配层做出来，后面所有游戏都复用。
+如果你已经有游戏，这一步不是重写玩法，而是给现有项目补平台层：
+
+```text
+现有游戏代码保持不动。
+新增 src/platform/。
+只把必要生命周期点接到现有 Boot/Menu/Play/Result 流程。
+不要为了 SDK 重构全部玩法。
+```
+
+如果你还没有项目，先接平台层再写玩法。原因：你的目标是打通平台链路，SDK 不是最后补丁。先把平台适配层做出来，后面所有游戏都复用。
 
 #### index.html
 
@@ -460,7 +910,18 @@ gameplayStart 不在菜单页提前触发。
 
 ### 03:15-05:45：做最小原创游戏
 
-第一款默认做：
+如果你已经有可玩的游戏，这段改成“补齐 CrazyGames 可提交完整性”：
+
+```text
+开始页：英文标题、Play、简短说明。
+游玩页：10 秒内进入核心玩法。
+结算页：score / best / retry / back to menu。
+失败条件：清楚，不要无故结束。
+移动端：触摸可玩，不依赖 hover。
+桌面端：鼠标或键盘可玩。
+```
+
+如果你还没有游戏，第一款默认做：
 
 ```text
 游戏名：Orbit Catcher
@@ -644,7 +1105,7 @@ muteAudio：如果平台要求静音，游戏不能再把声音打开。
 
 | 材料 | 第一款标准 |
 | --- | --- |
-| Build ZIP | ZIP 根目录直接包含 `index.html`、assets 和构建文件，不要多套一层无意义父目录 |
+| Portal upload folder | 根目录直接包含 `index.html`、assets 和构建文件，不要多套一层无意义父目录 |
 | Game title | 英文、原创、和游戏内标题一致、控制在页面提示长度内 |
 | Short description | 一句话说清核心玩法 |
 | Long description | 写清目标、操作、失败/胜利、成长或分数 |
@@ -655,7 +1116,7 @@ muteAudio：如果平台要求静音，游戏不能再把声音打开。
 | Landscape cover | 16:9，1920x1080 |
 | Portrait cover | 2:3，800x1200 |
 | Square cover | 1:1，800x800 |
-| Preview video | 15-20 秒，最大 50MB，展示真实玩法，不要声音、黑屏、logo 过场和促销文案 |
+| Preview videos | 横版和竖版各 15-20 秒，展示真实玩法，不要声音、黑屏、logo 过场和促销文案 |
 | QA report | 记录浏览器、设备、包体、文件数、SDK 事件、广告失败恢复 |
 | Asset license | 记录所有素材来源、license、是否修改、是否允许商用 |
 
@@ -688,9 +1149,10 @@ Touch drag, mouse drag.
 
 ```text
 3 张截图：菜单、游玩中、结算页。
-15-20 秒 preview video。
+横版和竖版各 15-20 秒 preview video。
 Cover images：按 Portal 当前要求生成 landscape / portrait / square。
-build zip：根目录包含 index.html 和资源。
+Portal upload folder：直接包含 index.html 和资源目录；如果 Portal 提示 archive files are not supported，不上传 zip。
+archive zip：只做本地归档和离线交付备份。
 qa-report.md：记录设备、浏览器、包体、SDK 事件。
 asset-license.csv：记录素材来源。
 ```
@@ -702,9 +1164,9 @@ Portal 执行：
 ```text
 1. 打开 https://developer.crazygames.com/
 2. Create / Submit game。
-3. 上传 build zip。
+3. 上传游戏文件：拖 Portal upload folder 里的 index.html 和资源目录，不拖 zip。
 4. 填 title、description、instructions、category、orientation。
-5. 上传 cover、screenshots、preview video。
+5. 上传 cover、screenshots、landscape preview video、portrait preview video。
 6. 进入 Preview tool。
 7. 在 Preview tool 中完整玩一局。
 8. 打开控制台，确认无 error。
@@ -1037,8 +1499,11 @@ requestAd error:
 | --- | --- | --- | --- | --- |
 | 致命 | 主线不是提交链路 | 旧文档先讲完成定义、原则、7 天计划、资料清单，SDK 接入只是一个任务点 | 当天容易停在调研、选题、模板化，没有真正提交 | 重写为“时间盒 + 交付物 + SDK 接口 + Portal 操作”的 runbook |
 | 致命 | 完成定义停在 Portal Preview | 原文把 Done 写成可预览、可提交，没有把 QA 接受和 CrazyGames 真实游戏页可玩作为完成条件 | 你会误判“已上架”，但玩家根本还不能在 CrazyGames 玩 | 改成 M0-M4 里程碑，并新增 Public Playable 验收 |
+| 致命 | 没有“已有游戏”分支 | 用户已经写好了小游戏，但文档仍默认从模板和新玩法开始 | 会浪费时间重建工程，真正缺的 build、SDK、材料和 Portal 反而没补齐 | 增加“已有小游戏的上架分诊”和现有项目体检 |
 | 致命 | SDK 接入没有落到代码边界 | 只说 `CrazyGamesAdapter stub`，没有规定 init、environment、gameplayStart、ad callback 怎么接 | AI 容易把 SDK 调用散落在 gameplay 里，后面换平台会崩 | 先实现 `PlatformAdapter`，所有 SDK 调用只能在适配层 |
 | 严重 | Basic Launch 和 SDK/广告关系讲得不够硬 | Basic Launch 可以不用 SDK，且广告禁用；但你现在目标是完整接入 SDK | 你可能以为“接了广告就能当天赚钱”，或广告按钮在 Basic 阶段无效果被拒 | 本文要求接 SDK，但广告能力只做受控入口，必须处理禁用和失败 |
+| 严重 | “是否需要 SDK”没有决策树 | 对已有游戏来说，SDK 可选/必需取决于 Basic、Full、变现目标 | 你可能为了 Basic 多做半天 SDK，也可能为了变现少接关键事件 | 增加 Basic/Full/变现三种 SDK 策略 |
+| 严重 | 广告按钮可能伤害 Basic 提交 | Basic Launch 广告禁用，如果 rewarded 按钮无效果，QA 会判体验问题 | 游戏本身能玩，却因为广告 UI 失败被退 | 建议 Basic 先接 game module，广告按钮隐藏或受能力位控制 |
 | 严重 | 缺少 Initial QA 被拒后的重提路径 | 原文提交后没有说明如何处理 QA feedback | 收到拒绝邮件后不知道改哪里，可能另起炉灶浪费一天 | 增加 QA 反馈分类、修复、重新 Preview、重新提交流程 |
 | 严重 | 缺少 Basic Launch 运营动作 | 原文提到 KPI，但没有把 dashboard、反馈、更新和复测变成每日动作 | 游戏即使上线也无法根据数据改进，难进 Full Launch | 增加 Basic Launch 每日检查和更新记录 |
 | 严重 | 缺少 Full Launch/收款准备 | 原文没有把广告、Billing、Tipalti、支付门槛纳入后续动作 | 进入 Full Launch 前才发现广告或收款资料卡住 | 增加 Full Launch 准备清单和 payout 资料入口 |
@@ -1054,6 +1519,7 @@ requestAd error:
 | 必须先完整学会 Phaser 才能做 | 你有开发能力和 AI 工具，只需要理解工程边界、Scene、Input、Update、Build，不需要系统学习完整框架 |
 | 必须先做最简单纯 HTML Canvas | 这会减少框架学习成本，但会增加平台化、移动端、资源管理和后续复用成本；第一款用 Phaser 更适合沉淀模板 |
 | 必须一开始就做 Unity/Godot/Cocos | 它们可以用，但 Web HTML5 + Phaser 的包体、构建和 SDK 接入更适合第一天打通链路 |
+| 已有游戏必须推倒重来套模板 | 只要现有游戏能 build、结构可补 SDK、质量达标，就应该补平台层和提交材料，不应该重写 |
 
 ### 未覆盖的攻击面
 
