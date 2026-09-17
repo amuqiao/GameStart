@@ -1,8 +1,209 @@
-# CrazyGames 一日上架作战手册
+# CrazyGames 一日提交与上架作战手册
 
 Last checked：2026-09-17
 
-一句话定位：这不是“每天一款”的口号清单，而是一份指导你完成“一款 HTML5 游戏开发、CrazyGames SDK 接入、构建、预览、提交、QA 跟进、Basic Launch 公开可玩验证、数据观察、更新、Full Launch/变现准备”的执行手册。
+一句话定位：这是一份面向新手开发者的图文 runbook，目标是用 AI 辅助把一款 HTML5 小游戏做到可提交 CrazyGames，并继续跟进到公开可玩、数据观察和 Full Launch/变现准备。
+
+## 行文主旨
+
+本文不试图把“游戏开发”一次性讲完，也不承诺“一天必然公开上架”。本文只服务一个可执行目标：
+
+```text
+用 AI 快速做出一款可玩的 HTML5 小游戏
+-> 补齐 CrazyGames 提交材料
+-> 通过 Developer Portal Preview
+-> 提交到 CrazyGames 审核队列
+-> 等审核通过后验证真实游戏页可玩
+-> 再根据 Basic Launch 数据决定是否推进 Full Launch 和变现
+```
+
+对新手来说，最大的风险不是不会写代码，而是把下面几件事混成一团：
+
+```text
+开发完成 != 可提交
+可提交 != 审核通过
+审核通过 != 搜索立刻可见
+Basic Launch != 已经变现
+接入 SDK != Basic 阶段能显示广告
+```
+
+所以本文的写法是：
+
+```text
+先建立心智模型
+再给新手 10 步主线
+再给环境、材料、Portal、SDK、QA 的具体步骤
+最后记录 Pulse Dodger 的真实提交流程作为案例
+```
+
+## 心智模型
+
+把 CrazyGames 上架想成一条流水线，而不是一个上传按钮：
+
+```text
+游戏本体 Game
+  玩法闭环：开始 -> 游玩 -> 失败/胜利 -> 结算 -> 重试
+  工程闭环：dev -> build -> preview -> package
+  质量闭环：英文、移动端、包体、性能、素材授权
+
+平台合同 Platform Contract
+  你声明什么，平台就测什么：
+    mobile -> 测手机
+    save progress -> 测存档
+    mute audio -> 测 SDK 静音
+    multiplayer -> 测多人要求
+    ads -> 测广告禁用/失败恢复
+
+商店材料 Store Assets
+  玩家看到什么，决定要不要点进来：
+    name
+    category / tags
+    description / controls
+    screenshots
+    landscape / portrait / square covers
+    landscape / portrait preview videos
+
+平台流程 Portal Flow
+  Upload -> Preview -> QA Results -> Details -> Finalize -> Awaiting review
+  这一步完成后只是提交审核，不是公开上架。
+
+上线生命周期 Launch Lifecycle
+  Awaiting review
+  -> Initial QA accepted / rejected
+  -> Basic Launch
+  -> Public URL playable
+  -> Dashboard metrics
+  -> Updates
+  -> Full Launch review
+  -> Monetization / payout
+```
+
+最重要的一句话：
+
+```text
+一天内你高确定性可以完成的是“提交到审核队列”，不是“保证公开上架并赚钱”。
+```
+
+## 新手 10 步主线
+
+如果你第一次做，不要从 1500 行文档里找入口，先按这 10 步走：
+
+```text
+1. 准备账号和环境：CrazyGames Developer Portal、Billing、Node、Chrome、ffmpeg、手机测试设备。
+2. 选技术路线：Phaser + TypeScript + Vite + CrazyGames HTML5 SDK v3。
+3. 选一个简单玩法：2D arcade / avoider / catcher，不做多人、不做 IAP、不做复杂 3D。
+4. 让 AI 基于模板或开源项目结构做原创改造，不直接搬素材、UI、关卡、名字。
+5. 本地跑通：开始、游玩、结算、重试、英文界面、手机触摸。
+6. 接平台层：PlatformAdapter、loadingStart/Stop、gameplayStart/Stop、muteAudio；Basic 阶段不要触发广告 SDK。
+7. 打包检查：build 成功、上传目录根部有 index.html、相对路径、包体和文件数达标。
+8. 生成材料：metadata、3 张截图、3 套 cover、横版/竖版 preview video、asset license。
+9. 进入 Developer Portal：Upload -> Preview -> QA Results -> Details -> Finalize。
+10. 提交后记录状态：Awaiting review 不等于上架；等 Basic Launch 后再验证真实 CrazyGames 游戏页。
+```
+
+这 10 步中，最容易卡死的是：
+
+| 卡点 | 快速判断 |
+| --- | --- |
+| Billing | 没完成会在最终提交时报 `Error fetching payment details`；可先用 `Hold Payments` 跑通提交 |
+| Save progress | 没接 CrazyGames Data Module 就选 `No`；已完全用 SDK Data 读写才选 Data Module |
+| Upload | 当前 Portal 可能不收 zip；直接拖上传目录里的 `index.html` 和 `assets/` |
+| Ads | Basic Launch 禁用广告；不要触发 ads/banner SDK 调用 |
+| Preview videos | 需要横版和竖版，15-20 秒，无声音 |
+| 上架判断 | `Awaiting review` 只是提交成功；有公开 CrazyGames URL 且普通玩家能玩，才算公开可玩 |
+
+## 开始前准备
+
+在写游戏前先准备这些，否则你会在最后一步被非代码问题卡住。
+
+| 类型 | 必备项 | 用途 |
+| --- | --- | --- |
+| 账号 | CrazyGames Developer Portal | 创建游戏、上传 build、Preview、提交审核 |
+| 账号 | Billing onboarding | 最终提交前可能校验付款资料；可先选择 `Hold Payments` |
+| 本地运行 | Node.js / npm | 跑 Phaser + Vite 工程 |
+| 本地浏览器 | Chrome | 本地测试和截图自动化最稳 |
+| 视频工具 | `ffmpeg` | 生成 15-20 秒横版/竖版 preview video |
+| 测试设备 | 手机浏览器 | 勾选 mobile 前必须真机玩过 |
+| AI 工具 | Codex / Claude | 生成代码、审查 SDK 接入、产出素材脚本和文档 |
+
+最低环境检查：
+
+```bash
+node -v
+npm -v
+ffmpeg -version
+```
+
+如果 `ffmpeg` 没有安装，先不要等到 Portal 的 `Game details` 页面才处理；没有 preview video 会卡在素材提交环节。
+
+## 三个关键决策树
+
+### 是否接 SDK
+
+```text
+只想最快 Basic 提交：
+  SDK 可选。
+  重点是 build、玩法、移动端、英文、素材、Portal Preview。
+
+想让第一款变成后续模板：
+  接最小 SDK。
+  范围：init、environment、loading、gameplayStart/Stop、muteAudio。
+
+想为 Full Launch 和变现做准备：
+  接完整 SDK。
+  但广告按钮必须受能力位控制，Basic 阶段不能让无效广告伤害体验。
+```
+
+### Save progress 怎么选
+
+```text
+没有存档：
+  选 No, the game does not need progress save。
+
+只用了浏览器 localStorage，且没有接 CrazyGames Data Module：
+  第一款保守选 No。
+
+已经通过 CrazyGames SDK Data Module 读写最高分、进度或设置：
+  选 Yes, using the Data Module from the CrazyGames SDK。
+
+有自己后端账号系统，并且和 CrazyGames User 关联：
+  才选 linked to a game account on the game's backend。
+```
+
+### Basic 阶段广告怎么处理
+
+```text
+Basic Launch:
+  monetization disabled
+  不要触发 requestAd / banners
+  不显示无效 rewarded 按钮
+
+Full Launch:
+  只通过 CrazyGames SDK 请求广告
+  midgame 放自然断点
+  rewarded 必须玩家主动触发
+  adError / adblock / unfilled 必须恢复游戏
+```
+
+### 什么状态才算上架
+
+```text
+Submitted / Awaiting review：
+  只代表提交成功。
+  不能在正式站搜索到是正常的。
+
+Accepted / Basic Launch：
+  代表通过初始 QA，开始小流量公开测试。
+  需要拿正式 CrazyGames 游戏 URL 做玩家视角验收。
+
+Public URL playable：
+  普通玩家不用登录开发者后台也能打开并完整玩一局。
+  这才算“公开可玩”的上架闭环。
+
+Full Launch：
+  代表平台认为数据和接入质量足够进入完整发布。
+  这时才进入广告变现和更大流量的主线。
+```
 
 ## 先纠偏
 
@@ -619,6 +820,67 @@ Submit step:
 不要勾选你没有实现和测试过的 SDK 能力。
 ```
 
+### 材料生产 SOP
+
+对每一款游戏，都建议固定产出下面这个目录。具体路径可以跟随游戏名变化，但结构不要变：
+
+```text
+materials/
+  metadata.md
+  screenshots/
+    menu.png
+    gameplay.png
+    result.png
+  covers/
+    landscape-1920x1080.png
+    portrait-800x1200.png
+    square-800x800.png
+  videos/
+    preview.mp4
+    preview-portrait.mp4
+  sources/
+    cover html / 原始素材 / 生成脚本中间产物
+```
+
+`metadata.md` 至少包含：
+
+```text
+Game name
+Short description
+Long description
+Instructions
+Controls
+Suggested category
+Suggested tags
+Material paths
+```
+
+视频生成要求：
+
+```text
+Landscape preview video:
+  16:9
+  15-20 秒
+  展示真实玩法
+  无声音
+  无默认鼠标光标
+  无黑屏 logo 过场
+  无 Play Now / promotional text
+
+Portrait preview video:
+  2:3
+  15-20 秒
+  可以从横版视频居中裁切生成，但必须确认核心玩法元素没有被裁掉
+```
+
+如果你已经有横版 `preview.mp4`，可以用 `ffmpeg` 临时生成 2:3 竖版视频：
+
+```bash
+ffmpeg -y -i materials/videos/preview.mp4 -vf 'crop=720:1080:600:0,scale=800:1200,format=yuv420p' -an -movflags +faststart materials/videos/preview-portrait.mp4
+```
+
+注意：上面的裁切参数只适合 `1920x1080` 横版源视频。其他分辨率要重新计算裁切区域，原则是保留中间玩法区域，再缩放到 2:3。
+
 ## 今天默认技术路线
 
 第一天不要再纠结技术栈。默认路线：
@@ -692,7 +954,7 @@ IAP
 4. 选择 Basic。
 5. Game name 填英文名，必须和游戏内标题一致。
 6. Game engine 选择 HTML5。
-7. Save progress 第一款选择 No, the game does not need progress save。
+7. Save progress 按真实能力选择：没接 Data Module 选 No；已用 CrazyGames Data Module 读写进度才选对应 Yes。
 8. Game options 按真实实现勾选，不要提前承诺。
 9. 点击 Preview 前，确认今天需要准备哪些材料。
 10. 如果 Portal 当前要求更多资料，记录到本文末尾的 submission-log。
