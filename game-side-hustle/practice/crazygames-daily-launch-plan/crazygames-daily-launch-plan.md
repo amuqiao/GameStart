@@ -8,7 +8,7 @@ Last checked：2026-09-17
 
 本文不试图把“游戏开发”一次性讲完，也不承诺“一天必然公开上架”。本文只服务一个可执行目标：
 
-```text
+```
 用 AI 快速做出一款可玩的 HTML5 小游戏
 -> 补齐 CrazyGames 提交材料
 -> 通过 Developer Portal Preview
